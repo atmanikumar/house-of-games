@@ -8,12 +8,13 @@ import styles from './page.module.css';
 
 export default function GamePage({ params }) {
   const router = useRouter();
-  const { getGame, addRound, addPlayerToGame, declareWinner, declareAceWinners, players, games, loading: gameLoading } = useGame();
+  const { getGame, addRound, addPlayerToGame, declareWinner, declareDraw, declareAceWinners, players, games, loading: gameLoading } = useGame();
   const { isAdmin, loading: authLoading } = useAuth();
   const [game, setGame] = useState(null);
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [showDeclareWinnerModal, setShowDeclareWinnerModal] = useState(false);
+  const [showMarkDrawModal, setShowMarkDrawModal] = useState(false);
   const [showMarkAcePlayerModal, setShowMarkAcePlayerModal] = useState(false);
   const [showEndAceGameModal, setShowEndAceGameModal] = useState(false);
   const [roundScores, setRoundScores] = useState({});
@@ -103,6 +104,12 @@ export default function GamePage({ params }) {
     declareWinner(params.id, selectedWinner);
     setShowDeclareWinnerModal(false);
     setSelectedWinner(null);
+    // Game will auto-update via useEffect watching 'games'
+  };
+
+  const handleMarkDraw = () => {
+    declareDraw(params.id);
+    setShowMarkDrawModal(false);
     // Game will auto-update via useEffect watching 'games'
   };
 
@@ -206,7 +213,11 @@ export default function GamePage({ params }) {
               </p>
               {game.status === 'completed' && (
                 <div className={styles.winnerBanner}>
-                  {game.winners && game.winners.length > 1 ? (
+                  {game.isDraw ? (
+                    <>
+                      🤝 Game ended in a Draw 🤝
+                    </>
+                  ) : game.winners && game.winners.length > 1 ? (
                     <>
                       🎉 Winners: {game.winners.map(wId => game.players.find(p => p.id === wId)?.name).join(', ')} 🎉
                     </>
@@ -222,12 +233,20 @@ export default function GamePage({ params }) {
               {game.status === 'in_progress' && isAdmin() && (
                 <>
                   {isChess ? (
-                    <button 
-                      className="btn btn-primary"
-                      onClick={() => setShowDeclareWinnerModal(true)}
-                    >
-                      👑 Declare Winner
-                    </button>
+                    <>
+                      <button 
+                        className="btn btn-primary"
+                        onClick={() => setShowDeclareWinnerModal(true)}
+                      >
+                        👑 Declare Winner
+                      </button>
+                      <button 
+                        className="btn btn-secondary"
+                        onClick={() => setShowMarkDrawModal(true)}
+                      >
+                        🤝 Mark as Draw
+                      </button>
+                    </>
                   ) : isAce ? (
                     <>
                       <button 
@@ -605,6 +624,52 @@ export default function GamePage({ params }) {
                 disabled={!selectedWinner}
               >
                 Confirm Winner
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark as Draw Modal - For Chess Games */}
+      {showMarkDrawModal && (
+        <div className="modal-overlay" onClick={() => setShowMarkDrawModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>🤝 Mark Game as Draw</h2>
+            
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              Are you sure you want to mark this game as a draw? 
+              <br /><br />
+              <strong>Both players will:</strong>
+              <br />• Have their total games count increased by 1
+              <br />• NOT have any wins added
+              <br />• Win percentage will be recalculated accordingly
+            </p>
+            
+            <div className={styles.playerList}>
+              {game.players.map(player => (
+                <div 
+                  key={player.id}
+                  className={styles.playerItem}
+                  style={{ cursor: 'default', opacity: 0.8 }}
+                >
+                  <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setShowMarkDrawModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleMarkDraw}
+              >
+                Confirm Draw
               </button>
             </div>
           </div>

@@ -388,6 +388,46 @@ export function GameProvider({ children }) {
     saveToServer('games', updatedGames);
   };
 
+  const declareDraw = (gameId) => {
+    const updatedGames = games.map(game => {
+      if (game.id === gameId) {
+        // Mark game as completed with draw
+        const status = 'completed';
+        
+        // Update player statistics - totalGames increases but wins don't
+        const updatedPlayerStats = players.map(player => {
+          const isInGame = game.players.find(p => p.id === player.id);
+          if (isInGame) {
+            const newTotalGames = player.totalGames + 1;
+            const winPercentage = newTotalGames > 0 ? Math.round((player.wins / newTotalGames) * 100) : 0;
+            return {
+              ...player,
+              totalGames: newTotalGames,
+              winPercentage
+            };
+          }
+          return player;
+        });
+        
+        setPlayers(updatedPlayerStats);
+        // Save player stats when game completes
+        saveToServer('players', updatedPlayerStats);
+        
+        return {
+          ...game,
+          status,
+          isDraw: true,
+          winner: null
+        };
+      }
+      return game;
+    });
+    
+    setGames(updatedGames);
+    // Save games after declaring draw
+    saveToServer('games', updatedGames);
+  };
+
   const declareAceWinners = (gameId, winnerIds) => {
     const updatedGames = games.map(game => {
       if (game.id === gameId) {
@@ -451,6 +491,7 @@ export function GameProvider({ children }) {
     addPlayerToGame,
     addRound,
     declareWinner,
+    declareDraw,
     declareAceWinners,
     getGame,
     getPlayerStats,

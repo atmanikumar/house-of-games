@@ -73,6 +73,7 @@ export async function initDatabase() {
         createdAt TEXT NOT NULL,
         status TEXT NOT NULL,
         winner TEXT,
+        isDraw INTEGER DEFAULT 0,
         player1_id TEXT NOT NULL,
         player1_name TEXT NOT NULL,
         player1_avatar TEXT NOT NULL,
@@ -250,6 +251,7 @@ export async function getGames() {
       createdAt: row.createdAt,
       status: row.status,
       winner: row.winner,
+      isDraw: row.isDraw === 1 || row.isDraw === true,
       maxPoints: null,
       players: [
         {
@@ -328,16 +330,17 @@ export async function saveGames(games) {
       // Chess requires exactly 2 players
       if (game.players.length === 2) {
         await db.execute({
-          sql: `INSERT INTO chess_games (id, title, createdAt, status, winner, 
+          sql: `INSERT INTO chess_games (id, title, createdAt, status, winner, isDraw,
                 player1_id, player1_name, player1_avatar, 
                 player2_id, player2_name, player2_avatar) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
             game.id,
             game.title,
             game.createdAt,
             game.status,
             game.winner || null,
+            game.isDraw ? 1 : 0,
             game.players[0].id,
             game.players[0].name,
             game.players[0].avatar,
