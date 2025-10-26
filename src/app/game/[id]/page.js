@@ -8,17 +8,21 @@ import styles from './page.module.css';
 
 export default function GamePage({ params }) {
   const router = useRouter();
-  const { getGame, addRound, addPlayerToGame, declareWinner, declareDraw, declareAceWinners, players, games, loading: gameLoading } = useGame();
+  const { getGame, addRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, loading: gameLoading } = useGame();
   const { isAdmin, loading: authLoading } = useAuth();
   const [game, setGame] = useState(null);
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [showDeclareWinnerModal, setShowDeclareWinnerModal] = useState(false);
   const [showMarkDrawModal, setShowMarkDrawModal] = useState(false);
+  const [showUpdateMaxPointsModal, setShowUpdateMaxPointsModal] = useState(false);
   const [showMarkAcePlayerModal, setShowMarkAcePlayerModal] = useState(false);
   const [showEndAceGameModal, setShowEndAceGameModal] = useState(false);
   const [roundScores, setRoundScores] = useState({});
+  const [droppedPlayers, setDroppedPlayers] = useState({});
   const [addPlayerError, setAddPlayerError] = useState('');
+  const [updateMaxPointsError, setUpdateMaxPointsError] = useState('');
+  const [newMaxPoints, setNewMaxPoints] = useState('');
   const [selectedPlayerToAdd, setSelectedPlayerToAdd] = useState(null);
   const [selectedWinner, setSelectedWinner] = useState(null);
   const [selectedAcePlayer, setSelectedAcePlayer] = useState(null);
@@ -51,6 +55,7 @@ export default function GamePage({ params }) {
         newScores[player.id] = '';
       });
       setRoundScores(newScores);
+      setDroppedPlayers({});
     }
   };
 
@@ -61,14 +66,43 @@ export default function GamePage({ params }) {
     }));
   };
 
+  const handleDropToggle = (playerId) => {
+    setDroppedPlayers(prev => ({
+      ...prev,
+      [playerId]: !prev[playerId]
+    }));
+    
+    // If dropping, automatically set score to 20
+    if (!droppedPlayers[playerId]) {
+      setRoundScores(prev => ({
+        ...prev,
+        [playerId]: '20'
+      }));
+    } else {
+      // If un-dropping, clear the score
+      setRoundScores(prev => ({
+        ...prev,
+        [playerId]: ''
+      }));
+    }
+  };
+
   const handleAddRound = () => {
-    // Convert empty strings to 0 before saving
+    // Convert empty strings to 0 before saving, but use 20 for dropped players
     const scoresWithDefaults = {};
+    const dropInfo = {};
+    
     Object.keys(roundScores).forEach(playerId => {
-      scoresWithDefaults[playerId] = parseInt(roundScores[playerId]) || 0;
+      if (droppedPlayers[playerId]) {
+        scoresWithDefaults[playerId] = 20; // Drop = 20 points
+        dropInfo[playerId] = true;
+      } else {
+        scoresWithDefaults[playerId] = parseInt(roundScores[playerId]) || 0;
+        dropInfo[playerId] = false;
+      }
     });
     
-    addRound(params.id, scoresWithDefaults);
+    addRound(params.id, scoresWithDefaults, dropInfo);
     
     // Reset scores for next round with empty strings
     resetRoundScores();
@@ -110,6 +144,28 @@ export default function GamePage({ params }) {
   const handleMarkDraw = () => {
     declareDraw(params.id);
     setShowMarkDrawModal(false);
+    // Game will auto-update via useEffect watching 'games'
+  };
+
+  const handleUpdateMaxPoints = () => {
+    const maxPointsValue = parseInt(newMaxPoints);
+    
+    if (!maxPointsValue || maxPointsValue < 1) {
+      setUpdateMaxPointsError('Please enter a valid number greater than 0');
+      return;
+    }
+    
+    const result = updateMaxPoints(params.id, maxPointsValue);
+    
+    if (result && !result.success) {
+      setUpdateMaxPointsError(result.error);
+      return;
+    }
+    
+    // Success
+    setShowUpdateMaxPointsModal(false);
+    setNewMaxPoints('');
+    setUpdateMaxPointsError('');
     // Game will auto-update via useEffect watching 'games'
   };
 
@@ -283,19 +339,6 @@ export default function GamePage({ params }) {
                       >
                         📝 Add Round Points
                       </button>
-                      <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                        <button 
-                          className="btn btn-secondary"
-                          onClick={() => {
-                            setShowAddPlayerModal(true);
-                            setAddPlayerError('');
-                            setSelectedPlayerToAdd(null);
-                          }}
-                          style={{ padding: '10px 16px' }}
-                        >
-                          ➕
-                        </button>
-                      </div>
                     </>
                   )}
                 </>
@@ -319,6 +362,7 @@ export default function GamePage({ params }) {
                   <tr>
                     <th>Player</th>
                     {!isChess && <th>{isAce ? 'Points Won' : 'Total Points'}</th>}
+                    {!isChess && !isAce && <th>Remaining</th>}
                     {!isChess && !isAce && <th>Status</th>}
                   </tr>
                 </thead>
@@ -327,33 +371,93 @@ export default function GamePage({ params }) {
                   {(isChess ? game.players : 
                     isAce ? [...game.players].sort((a, b) => b.totalPoints - a.totalPoints) :
                     [...game.players].sort((a, b) => a.totalPoints - b.totalPoints))
-                    .map((player) => (
-                    <tr key={player.id} className={player.isLost ? styles.lostPlayer : ''}>
-                      <td>
-                        <div className={styles.playerCell}>
-                          <span className="avatar">{player.avatar}</span>
-                          <span>{player.name}</span>
-                        </div>
-                      </td>
-                      {!isChess && (
-                        <td>
-                          <strong className={styles.points}>{player.totalPoints}</strong>
-                        </td>
-                      )}
-                      {!isChess && !isAce && (
-                        <td>
-                          {player.isLost ? (
-                            <span className="badge badge-danger">Eliminated</span>
-                          ) : (
-                            <span className="badge badge-success">Active</span>
+                    .map((player) => {
+                      const remainingPoints = !isChess && !isAce && game.maxPoints 
+                        ? game.maxPoints - player.totalPoints 
+                        : 0;
+                      
+                      return (
+                        <tr key={player.id} className={player.isLost ? styles.lostPlayer : ''}>
+                          <td>
+                            <div className={styles.playerCell}>
+                              <span className="avatar">{player.avatar}</span>
+                              <span>{player.name}</span>
+                            </div>
+                          </td>
+                          {!isChess && (
+                            <td>
+                              <strong className={styles.points}>{player.totalPoints}</strong>
+                            </td>
                           )}
-                        </td>
-                      )}
-                    </tr>
-                  ))}
+                          {!isChess && !isAce && (
+                            <td>
+                              <span style={{ 
+                                color: remainingPoints <= 0 ? 'var(--danger)' : 
+                                       remainingPoints <= 10 ? 'var(--warning)' : 
+                                       'var(--success)',
+                                fontWeight: '600'
+                              }}>
+                                {remainingPoints <= 0 ? 0 : remainingPoints}
+                              </span>
+                            </td>
+                          )}
+                          {!isChess && !isAce && (
+                            <td>
+                              {player.isDropped ? (
+                                <span className="badge" style={{ 
+                                  background: 'var(--warning)', 
+                                  color: 'white' 
+                                }}>
+                                  Dropped
+                                </span>
+                              ) : player.isLost ? (
+                                <span className="badge badge-danger">Eliminated</span>
+                              ) : (
+                                <span className="badge badge-success">Active</span>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
+            
+            {/* Action buttons for Rummy games - below the standings table */}
+            {!isChess && !isAce && game.status === 'in_progress' && isAdmin() && (
+              <div style={{ 
+                display: 'flex', 
+                gap: '12px', 
+                marginTop: '20px',
+                padding: '16px',
+                background: 'rgba(59, 130, 246, 0.05)',
+                borderRadius: '8px',
+                borderTop: '2px solid rgba(59, 130, 246, 0.1)',
+                flexWrap: 'wrap'
+              }}>
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowUpdateMaxPointsModal(true);
+                    setNewMaxPoints(game.maxPoints.toString());
+                    setUpdateMaxPointsError('');
+                  }}
+                >
+                  🎯 Update Max Points
+                </button>
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowAddPlayerModal(true);
+                    setAddPlayerError('');
+                    setSelectedPlayerToAdd(null);
+                  }}
+                >
+                  ➕ Add Player
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Game History - Only show for non-Chess games */}
@@ -435,6 +539,7 @@ export default function GamePage({ params }) {
                           .map(player => {
                             const score = event.scores[player.id];
                             const isAceInRound = isAce && score === 0;
+                            const hasDropped = event.drops && event.drops[player.id] === true;
                             
                             return (
                               <div key={player.id} className={styles.scoreItem}>
@@ -444,6 +549,19 @@ export default function GamePage({ params }) {
                                   </span>
                                   {player.name}
                                   {isAceInRound && <span style={{ marginLeft: '8px', color: 'var(--danger)' }}>🎯</span>}
+                                  {hasDropped && (
+                                    <span style={{ 
+                                      marginLeft: '8px', 
+                                      fontSize: '11px',
+                                      padding: '2px 6px',
+                                      background: 'var(--warning)',
+                                      color: 'white',
+                                      borderRadius: '4px',
+                                      fontWeight: '600'
+                                    }}>
+                                      DROP
+                                    </span>
+                                  )}
                                 </span>
                                 <span className={styles.scoreValue} style={isAceInRound ? { color: 'var(--danger)', fontWeight: '600' } : {}}>
                                   {isAce ? (score === 0 ? 'ACE' : `+${score} pt${score !== 1 ? 's' : ''}`) : `${score} pts`}
@@ -478,15 +596,42 @@ export default function GamePage({ params }) {
                     </span>
                     {player.name}
                   </label>
-                  <input 
-                    type="number" 
-                    value={roundScores[player.id] || ''}
-                    onChange={(e) => handleScoreChange(player.id, e.target.value)}
-                    onWheel={(e) => e.target.blur()}
-                    min="0"
-                    placeholder="Enter points"
-                    autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
-                  />
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input 
+                      type="number" 
+                      value={roundScores[player.id] || ''}
+                      onChange={(e) => handleScoreChange(player.id, e.target.value)}
+                      onWheel={(e) => e.target.blur()}
+                      min="0"
+                      placeholder="Enter points"
+                      disabled={droppedPlayers[player.id]}
+                      style={{ flex: 1 }}
+                      autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
+                    />
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '6px',
+                      cursor: 'pointer',
+                      padding: '8px 12px',
+                      background: droppedPlayers[player.id] ? 'var(--danger)' : 'transparent',
+                      border: '2px solid var(--danger)',
+                      borderRadius: '6px',
+                      color: droppedPlayers[player.id] ? 'white' : 'var(--danger)',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.2s'
+                    }}>
+                      <input 
+                        type="checkbox"
+                        checked={droppedPlayers[player.id] || false}
+                        onChange={() => handleDropToggle(player.id)}
+                        style={{ display: 'none' }}
+                      />
+                      {droppedPlayers[player.id] ? '✓ Drop (20 pts)' : 'Drop?'}
+                    </label>
+                  </div>
                 </div>
               ))}
             </div>
@@ -670,6 +815,107 @@ export default function GamePage({ params }) {
                 onClick={handleMarkDraw}
               >
                 Confirm Draw
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Max Points Modal - For Rummy Games */}
+      {showUpdateMaxPointsModal && (
+        <div className="modal-overlay" onClick={() => {
+          setShowUpdateMaxPointsModal(false);
+          setNewMaxPoints('');
+          setUpdateMaxPointsError('');
+        }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h2>🎯 Update Max Points</h2>
+            
+            {updateMaxPointsError && (
+              <div style={{ 
+                padding: '12px', 
+                marginBottom: '16px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '2px solid var(--danger)',
+                borderRadius: '8px',
+                color: 'var(--danger)',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}>
+                ⚠️ {updateMaxPointsError}
+              </div>
+            )}
+            
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+              Change the maximum points for this game.
+              <br /><br />
+              <strong>Note:</strong> Players with points equal to or above the new max will be marked as eliminated.
+            </p>
+            
+            <div className="form-group">
+              <label>Max Points</label>
+              <input 
+                type="number" 
+                value={newMaxPoints}
+                onChange={(e) => setNewMaxPoints(e.target.value)}
+                onWheel={(e) => e.target.blur()}
+                min="1"
+                placeholder="Enter max points"
+                autoFocus
+              />
+            </div>
+
+            <div style={{ 
+              padding: '12px', 
+              marginTop: '16px',
+              marginBottom: '16px',
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: '8px'
+            }}>
+              <h3 style={{ fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>
+                Current Player Points:
+              </h3>
+              {game.players.map(player => (
+                <div 
+                  key={player.id}
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    padding: '4px 0',
+                    fontSize: '14px'
+                  }}
+                >
+                  <span>
+                    <span className="avatar" style={{ fontSize: '16px', marginRight: '6px' }}>
+                      {player.avatar}
+                    </span>
+                    {player.name}
+                  </span>
+                  <span style={{ fontWeight: '600' }}>
+                    {player.totalPoints} pts
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className={styles.modalActions}>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => {
+                  setShowUpdateMaxPointsModal(false);
+                  setNewMaxPoints('');
+                  setUpdateMaxPointsError('');
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-success" 
+                onClick={handleUpdateMaxPoints}
+              >
+                Update Max Points
               </button>
             </div>
           </div>

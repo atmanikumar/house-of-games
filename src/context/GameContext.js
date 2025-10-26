@@ -42,6 +42,54 @@ const saveToServer = async (key, data) => {
   }
 };
 
+// Helper function to create a new game on server
+const createGameOnServer = async (game) => {
+  try {
+    console.log(`➕ Creating game ${game.id} (${game.type})...`);
+    const response = await fetch(`/api/games`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(game),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error(`❌ Failed to create game:`, response.status, errorData);
+      return false;
+    }
+    
+    console.log(`✅ Successfully created game ${game.id}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error creating game:`, error.message, error);
+    return false;
+  }
+};
+
+// Helper function to update a single game
+const updateGameOnServer = async (game) => {
+  try {
+    console.log(`🔄 Updating game ${game.id} (${game.type})...`);
+    const response = await fetch(`/api/games`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(game),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error(`❌ Failed to update game:`, response.status, errorData);
+      return false;
+    }
+    
+    console.log(`✅ Successfully updated game ${game.id}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error updating game:`, error.message, error);
+    return false;
+  }
+};
+
 // Helper function to load data from server
 const loadFromServer = async (key) => {
   try {
@@ -109,7 +157,7 @@ export function GameProvider({ children }) {
   };
 
 
-  const createGame = (gameType, selectedPlayerIds, maxPoints = 120) => {
+  const createGame = async (gameType, selectedPlayerIds, maxPoints = 120) => {
     const now = new Date();
     const gameNumber = games.filter(g => 
       new Date(g.createdAt).toDateString() === now.toDateString()
@@ -142,8 +190,14 @@ export function GameProvider({ children }) {
 
     const updatedGames = [...games, newGame];
     setGames(updatedGames);
-    // Save immediately after creating game
-    saveToServer('games', updatedGames);
+    
+    // Create new game on server (await to ensure it completes)
+    const result = await createGameOnServer(newGame);
+    
+    if (!result) {
+      console.error('❌ Failed to create game on server');
+    }
+    
     return newGame;
   };
 
@@ -188,285 +242,314 @@ export function GameProvider({ children }) {
       newPlayerPoints = maxPoints + 1;
     }
     
-    const updatedGames = games.map(g => {
-      if (g.id === gameId) {
-        // Create player addition event
-        const playerAddEvent = {
-          id: Date.now().toString(),
-          type: 'player_added',
-          timestamp: new Date().toISOString(),
-          playerId: playerId,
-          playerName: player.name,
-          playerAvatar: player.avatar,
-          startingPoints: newPlayerPoints
-        };
-        
-        // If history doesn't exist, initialize it with existing rounds
-        let gameHistory = g.history || [];
-        if (!g.history && g.rounds && g.rounds.length > 0) {
-          // Convert old rounds to history format with type field
-          gameHistory = g.rounds.map(round => ({
-            ...round,
-            type: 'round'
-          }));
-        }
-        
-        return {
-          ...g,
-          players: [...g.players, {
-            id: playerId,
-            name: player.name,
-            avatar: player.avatar,
-            totalPoints: newPlayerPoints,
-            isLost: false
-          }],
-          history: [...gameHistory, playerAddEvent]
-        };
-      }
-      return g;
-    });
+    // Create player addition event
+    const playerAddEvent = {
+      id: Date.now().toString(),
+      type: 'player_added',
+      timestamp: new Date().toISOString(),
+      playerId: playerId,
+      playerName: player.name,
+      playerAvatar: player.avatar,
+      startingPoints: newPlayerPoints
+    };
     
+    // If history doesn't exist, initialize it with existing rounds
+    let gameHistory = game.history || [];
+    if (!game.history && game.rounds && game.rounds.length > 0) {
+      // Convert old rounds to history format with type field
+      gameHistory = game.rounds.map(round => ({
+        ...round,
+        type: 'round'
+      }));
+    }
+    
+    const updatedGame = {
+      ...game,
+      players: [...game.players, {
+        id: playerId,
+        name: player.name,
+        avatar: player.avatar,
+        totalPoints: newPlayerPoints,
+        isLost: false
+      }],
+      history: [...gameHistory, playerAddEvent]
+    };
+    
+    const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
     setGames(updatedGames);
-    // Save after adding player to game
-    saveToServer('games', updatedGames);
+    
+    // Update only this game on server
+    updateGameOnServer(updatedGame);
     
     return { success: true };
   };
 
-  const addRound = (gameId, roundScores) => {
-    const updatedGames = games.map(game => {
-      if (game.id === gameId) {
-        const isAce = game.type.toLowerCase() === 'ace';
-        
-        const newRound = {
-          id: Date.now().toString(),
-          type: 'round',
-          roundNumber: game.rounds.length + 1,
-          scores: roundScores,
-          timestamp: new Date().toISOString()
-        };
+  const addRound = (gameId, roundScores, dropInfo = {}) => {
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+    
+    const isAce = game.type.toLowerCase() === 'ace';
+    
+    const newRound = {
+      id: Date.now().toString(),
+      type: 'round',
+      roundNumber: game.rounds.length + 1,
+      scores: roundScores,
+      drops: dropInfo, // Track which players dropped in this round
+      timestamp: new Date().toISOString()
+    };
 
-        // For Ace: no elimination, just track points
-        if (isAce) {
-          const updatedPlayers = game.players.map(player => {
-            const score = roundScores[player.id] || 0;
-            const newTotal = player.totalPoints + score;
+    let updatedGame;
+
+    // For Ace: no elimination, just track points
+    if (isAce) {
+      const updatedPlayers = game.players.map(player => {
+        const score = roundScores[player.id] || 0;
+        const newTotal = player.totalPoints + score;
+        return {
+          ...player,
+          totalPoints: newTotal,
+          isLost: false // No elimination in Ace
+        };
+      });
+
+      updatedGame = {
+        ...game,
+        rounds: [...game.rounds, newRound],
+        history: [...(game.history || []), newRound],
+        players: updatedPlayers,
+        status: game.status, // Admin manually ends game
+        winner: game.winner,
+        winners: game.winners
+      };
+    } else {
+      // For Rummy: original logic with elimination + drop status
+      const updatedPlayers = game.players.map(player => {
+        const score = roundScores[player.id] || 0;
+        const newTotal = player.totalPoints + score;
+        const hasDropped = dropInfo[player.id] === true;
+        
+        return {
+          ...player,
+          totalPoints: newTotal,
+          isLost: newTotal >= game.maxPoints,
+          isDropped: hasDropped || player.isDropped // Once dropped, stays dropped
+        };
+      });
+
+      // Check if game is over
+      const playersNotLost = updatedPlayers.filter(p => !p.isLost);
+      let status = game.status;
+      let winner = game.winner;
+
+      if (playersNotLost.length === 1) {
+        status = 'completed';
+        winner = playersNotLost[0].id;
+        
+        const updatedPlayerStats = players.map(player => {
+          const gamePlayer = updatedPlayers.find(gp => gp.id === player.id);
+          if (gamePlayer) {
+            const newTotalGames = player.totalGames + 1;
+            const newWins = player.wins + (player.id === winner ? 1 : 0);
+            const winPercentage = newTotalGames > 0 ? Math.round((newWins / newTotalGames) * 100) : 0;
             return {
               ...player,
-              totalPoints: newTotal,
-              isLost: false // No elimination in Ace
+              totalGames: newTotalGames,
+              wins: newWins,
+              winPercentage
             };
+          }
+          return player;
+        });
+        
+        setPlayers(updatedPlayerStats);
+        saveToServer('players', updatedPlayerStats);
+      } else if (playersNotLost.length === 0) {
+        status = 'completed';
+        // If all lost, the one with lowest score wins
+        const sortedPlayers = [...updatedPlayers].sort((a, b) => a.totalPoints - b.totalPoints);
+        winner = sortedPlayers[0].id;
+
+        updatedPlayers.forEach(player => {
+          updatePlayer(player.id, {
+            totalGames: players.find(p => p.id === player.id).totalGames + 1,
+            wins: player.id === winner 
+              ? players.find(p => p.id === player.id).wins + 1 
+              : players.find(p => p.id === player.id).wins
           });
-
-          return {
-            ...game,
-            rounds: [...game.rounds, newRound],
-            history: [...(game.history || []), newRound],
-            players: updatedPlayers,
-            status: game.status, // Admin manually ends game
-            winner: game.winner,
-            winners: game.winners
-          };
-        }
-
-        // For Rummy: original logic with elimination
-        const updatedPlayers = game.players.map(player => {
-          const score = roundScores[player.id] || 0;
-          const newTotal = player.totalPoints + score;
-          return {
-            ...player,
-            totalPoints: newTotal,
-            isLost: newTotal >= game.maxPoints
-          };
         });
 
-        // Check if game is over
-        const playersNotLost = updatedPlayers.filter(p => !p.isLost);
-        let status = game.status;
-        let winner = game.winner;
-
-        if (playersNotLost.length === 1) {
-          status = 'completed';
-          winner = playersNotLost[0].id;
-          
-          const updatedPlayerStats = players.map(player => {
-            const gamePlayer = updatedPlayers.find(gp => gp.id === player.id);
-            if (gamePlayer) {
-              const newTotalGames = player.totalGames + 1;
-              const newWins = player.wins + (player.id === winner ? 1 : 0);
-              const winPercentage = newTotalGames > 0 ? Math.round((newWins / newTotalGames) * 100) : 0;
-              return {
-                ...player,
-                totalGames: newTotalGames,
-                wins: newWins,
-                winPercentage
-              };
-            }
-            return player;
-          });
-          
-          setPlayers(updatedPlayerStats);
-          saveToServer('players', updatedPlayerStats);
-        } else if (playersNotLost.length === 0) {
-          status = 'completed';
-          // If all lost, the one with lowest score wins
-          const sortedPlayers = [...updatedPlayers].sort((a, b) => a.totalPoints - b.totalPoints);
-          winner = sortedPlayers[0].id;
-
-          updatedPlayers.forEach(player => {
-            updatePlayer(player.id, {
-              totalGames: players.find(p => p.id === player.id).totalGames + 1,
-              wins: player.id === winner 
-                ? players.find(p => p.id === player.id).wins + 1 
-                : players.find(p => p.id === player.id).wins
-            });
-          });
-
-          setTimeout(() => {
-            setPlayers(prev => prev.map(p => ({
-              ...p,
-              winPercentage: p.totalGames > 0 ? Math.round((p.wins / p.totalGames) * 100) : 0
-            })));
-          }, 100);
-        }
-
-        return {
-          ...game,
-          rounds: [...game.rounds, newRound],
-          history: [...(game.history || []), newRound],
-          players: updatedPlayers,
-          status,
-          winner
-        };
+        setTimeout(() => {
+          setPlayers(prev => prev.map(p => ({
+            ...p,
+            winPercentage: p.totalGames > 0 ? Math.round((p.wins / p.totalGames) * 100) : 0
+          })));
+        }, 100);
       }
-      return game;
-    });
+
+      updatedGame = {
+        ...game,
+        rounds: [...game.rounds, newRound],
+        history: [...(game.history || []), newRound],
+        players: updatedPlayers,
+        status,
+        winner
+      };
+    }
     
+    const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
     setGames(updatedGames);
-    // Save games after adding round
-    saveToServer('games', updatedGames);
+    
+    // Update only this game on server
+    updateGameOnServer(updatedGame);
   };
 
   const declareWinner = (gameId, winnerId) => {
-    const updatedGames = games.map(game => {
-      if (game.id === gameId) {
-        // Mark game as completed with the winner
-        const status = 'completed';
-        
-        // Update player statistics
-        const updatedPlayerStats = players.map(player => {
-          const isInGame = game.players.find(p => p.id === player.id);
-          if (isInGame) {
-            const newTotalGames = player.totalGames + 1;
-            const newWins = player.wins + (player.id === winnerId ? 1 : 0);
-            const winPercentage = newTotalGames > 0 ? Math.round((newWins / newTotalGames) * 100) : 0;
-            return {
-              ...player,
-              totalGames: newTotalGames,
-              wins: newWins,
-              winPercentage
-            };
-          }
-          return player;
-        });
-        
-        setPlayers(updatedPlayerStats);
-        // Save player stats when game completes
-        saveToServer('players', updatedPlayerStats);
-        
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+    
+    // Update player statistics
+    const updatedPlayerStats = players.map(player => {
+      const isInGame = game.players.find(p => p.id === player.id);
+      if (isInGame) {
+        const newTotalGames = player.totalGames + 1;
+        const newWins = player.wins + (player.id === winnerId ? 1 : 0);
+        const winPercentage = newTotalGames > 0 ? Math.round((newWins / newTotalGames) * 100) : 0;
         return {
-          ...game,
-          status,
-          winner: winnerId
+          ...player,
+          totalGames: newTotalGames,
+          wins: newWins,
+          winPercentage
         };
       }
-      return game;
+      return player;
     });
     
+    setPlayers(updatedPlayerStats);
+    saveToServer('players', updatedPlayerStats);
+    
+    const updatedGame = {
+      ...game,
+      status: 'completed',
+      winner: winnerId
+    };
+    
+    const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
     setGames(updatedGames);
-    // Save games after declaring winner
-    saveToServer('games', updatedGames);
+    
+    // Update only this game on server
+    updateGameOnServer(updatedGame);
   };
 
   const declareDraw = (gameId) => {
-    const updatedGames = games.map(game => {
-      if (game.id === gameId) {
-        // Mark game as completed with draw
-        const status = 'completed';
-        
-        // Update player statistics - totalGames increases but wins don't
-        const updatedPlayerStats = players.map(player => {
-          const isInGame = game.players.find(p => p.id === player.id);
-          if (isInGame) {
-            const newTotalGames = player.totalGames + 1;
-            const winPercentage = newTotalGames > 0 ? Math.round((player.wins / newTotalGames) * 100) : 0;
-            return {
-              ...player,
-              totalGames: newTotalGames,
-              winPercentage
-            };
-          }
-          return player;
-        });
-        
-        setPlayers(updatedPlayerStats);
-        // Save player stats when game completes
-        saveToServer('players', updatedPlayerStats);
-        
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+    
+    // Update player statistics - totalGames increases but wins don't
+    const updatedPlayerStats = players.map(player => {
+      const isInGame = game.players.find(p => p.id === player.id);
+      if (isInGame) {
+        const newTotalGames = player.totalGames + 1;
+        const winPercentage = newTotalGames > 0 ? Math.round((player.wins / newTotalGames) * 100) : 0;
         return {
-          ...game,
-          status,
-          isDraw: true,
-          winner: null
+          ...player,
+          totalGames: newTotalGames,
+          winPercentage
         };
       }
-      return game;
+      return player;
     });
     
+    setPlayers(updatedPlayerStats);
+    saveToServer('players', updatedPlayerStats);
+    
+    const updatedGame = {
+      ...game,
+      status: 'completed',
+      isDraw: true,
+      winner: null
+    };
+    
+    const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
     setGames(updatedGames);
-    // Save games after declaring draw
-    saveToServer('games', updatedGames);
+    
+    // Update only this game on server
+    updateGameOnServer(updatedGame);
+  };
+
+  const updateMaxPoints = (gameId, newMaxPoints) => {
+    const game = games.find(g => g.id === gameId);
+    
+    if (!game) {
+      return { success: false, error: 'Game not found' };
+    }
+    
+    // Validate max points
+    if (!newMaxPoints || newMaxPoints < 1) {
+      return { 
+        success: false, 
+        error: 'Max points must be greater than 0' 
+      };
+    }
+    
+    // Update max points and recalculate who is lost based on new max
+    const updatedPlayers = game.players.map(player => ({
+      ...player,
+      isLost: player.totalPoints >= newMaxPoints
+    }));
+    
+    const updatedGame = {
+      ...game,
+      maxPoints: newMaxPoints,
+      players: updatedPlayers
+    };
+    
+    const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
+    setGames(updatedGames);
+    
+    // Update only this game on server
+    updateGameOnServer(updatedGame);
+    
+    return { success: true };
   };
 
   const declareAceWinners = (gameId, winnerIds) => {
-    const updatedGames = games.map(game => {
-      if (game.id === gameId) {
-        // Mark game as completed with multiple winners
-        const status = 'completed';
-        
-        // Update player statistics - all winners get +1 win
-        const updatedPlayerStats = players.map(player => {
-          const isInGame = game.players.find(p => p.id === player.id);
-          if (isInGame) {
-            const newTotalGames = player.totalGames + 1;
-            const isWinner = winnerIds.includes(player.id);
-            const newWins = player.wins + (isWinner ? 1 : 0);
-            const winPercentage = newTotalGames > 0 ? Math.round((newWins / newTotalGames) * 100) : 0;
-            return {
-              ...player,
-              totalGames: newTotalGames,
-              wins: newWins,
-              winPercentage
-            };
-          }
-          return player;
-        });
-        
-        setPlayers(updatedPlayerStats);
-        saveToServer('players', updatedPlayerStats);
-        
+    const game = games.find(g => g.id === gameId);
+    if (!game) return;
+    
+    // Update player statistics - all winners get +1 win
+    const updatedPlayerStats = players.map(player => {
+      const isInGame = game.players.find(p => p.id === player.id);
+      if (isInGame) {
+        const newTotalGames = player.totalGames + 1;
+        const isWinner = winnerIds.includes(player.id);
+        const newWins = player.wins + (isWinner ? 1 : 0);
+        const winPercentage = newTotalGames > 0 ? Math.round((newWins / newTotalGames) * 100) : 0;
         return {
-          ...game,
-          status,
-          winners: winnerIds,
-          winner: winnerIds[0] // Set first winner as primary (for compatibility)
+          ...player,
+          totalGames: newTotalGames,
+          wins: newWins,
+          winPercentage
         };
       }
-      return game;
+      return player;
     });
     
+    setPlayers(updatedPlayerStats);
+    saveToServer('players', updatedPlayerStats);
+    
+    const updatedGame = {
+      ...game,
+      status: 'completed',
+      winners: winnerIds,
+      winner: winnerIds[0] // Set first winner as primary (for compatibility)
+    };
+    
+    const updatedGames = games.map(g => g.id === gameId ? updatedGame : g);
     setGames(updatedGames);
-    saveToServer('games', updatedGames);
+    
+    // Update only this game on server
+    updateGameOnServer(updatedGame);
   };
 
   const getGame = (gameId) => {
@@ -492,6 +575,7 @@ export function GameProvider({ children }) {
     addRound,
     declareWinner,
     declareDraw,
+    updateMaxPoints,
     declareAceWinners,
     getGame,
     getPlayerStats,

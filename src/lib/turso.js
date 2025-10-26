@@ -19,86 +19,30 @@ export function getTursoClient() {
   return client;
 }
 
-// Initialize database tables
+// Initialize database tables (migration only - add isDraw column)
 export async function initDatabase() {
   const db = getTursoClient();
   if (!db) return false;
 
   try {
-    // Create users table
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        username TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        name TEXT NOT NULL,
-        role TEXT NOT NULL,
-        createdAt TEXT NOT NULL
-      )
-    `);
+    // Add isDraw column to existing chess_games table (migration)
+    try {
+      await db.execute(`ALTER TABLE chess_games ADD COLUMN isDraw INTEGER DEFAULT 0`);
+      console.log('✅ Added isDraw column to chess_games table');
+    } catch (error) {
+      // Column already exists, ignore the error
+      if (error.message.includes('duplicate column') || error.message.includes('already exists')) {
+        console.log('ℹ️  isDraw column already exists in chess_games table');
+      } else {
+        console.error('❌ Error adding isDraw column:', error.message);
+        throw error;
+      }
+    }
 
-    // Create players table
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS players (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        avatar TEXT NOT NULL,
-        wins INTEGER DEFAULT 0,
-        gamesPlayed INTEGER DEFAULT 0,
-        totalGames INTEGER DEFAULT 0,
-        winPercentage REAL DEFAULT 0,
-        rank INTEGER DEFAULT 0
-      )
-    `);
-
-    // Create games table (for Rummy, Ace, etc. - point-based games)
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS games (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        title TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        status TEXT NOT NULL,
-        winner TEXT,
-        maxPoints INTEGER NOT NULL,
-        data TEXT NOT NULL
-      )
-    `);
-
-    // Create chess_games table (separate table for chess - win/lose only)
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS chess_games (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        status TEXT NOT NULL,
-        winner TEXT,
-        isDraw INTEGER DEFAULT 0,
-        player1_id TEXT NOT NULL,
-        player1_name TEXT NOT NULL,
-        player1_avatar TEXT NOT NULL,
-        player2_id TEXT NOT NULL,
-        player2_name TEXT NOT NULL,
-        player2_avatar TEXT NOT NULL
-      )
-    `);
-
-    // Create ace_games table (one loser per round, all others win)
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS ace_games (
-        id TEXT PRIMARY KEY,
-        title TEXT NOT NULL,
-        createdAt TEXT NOT NULL,
-        status TEXT NOT NULL,
-        winners TEXT,
-        data TEXT NOT NULL
-      )
-    `);
-
-    console.log('✅ Database tables initialized (games + chess_games + ace_games)');
+    console.log('✅ Database migration completed');
     return true;
   } catch (error) {
-    console.error('❌ Database initialization error:', error.message);
+    console.error('❌ Database migration error:', error.message);
     return false;
   }
 }
@@ -380,6 +324,91 @@ export async function saveGames(games) {
     return false;
   }
 }
+
+// Update or Insert a specific game in database
+export async function updateGameInDB(game) {
+  const db = getTursoClient();
+  if (!db) return false;
+
+  try {
+    const type = game.type.toLowerCase();
+    
+    if (type === 'chess') {
+      // Chess requires exactly 2 players
+      if (game.players.length !== 2) {
+        console.error(`❌ Chess game must have exactly 2 players, got ${game.players.length}`);
+        return false;
+      }
+      
+      // Try to insert, if exists then update
+      const result = await db.execute({
+        sql: `INSERT OR REPLACE INTO chess_games 
+              (id, title, createdAt, status, winner, isDraw,
+               player1_id, player1_name, player1_avatar,
+               player2_id, player2_name, player2_avatar)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          game.id,
+          game.title,
+          game.createdAt,
+          game.status,
+          game.winner || null,
+          game.isDraw ? 1 : 0,
+          game.players[0].id,
+          game.players[0].name,
+          game.players[0].avatar,
+          game.players[1].id,
+          game.players[1].name,
+          game.players[1].avatar
+        ]
+      });
+      console.log(`✅ Saved chess game ${game.id} in database (rows affected: ${result.rowsAffected})`);
+    } else if (type === 'ace') {
+      const winners = game.status === 'completed' && game.winners 
+        ? game.winners.join(',') 
+        : null;
+      
+      const result = await db.execute({
+        sql: `INSERT OR REPLACE INTO ace_games (id, title, createdAt, status, winners, data)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [
+          game.id,
+          game.title,
+          game.createdAt,
+          game.status,
+          winners,
+          JSON.stringify(game)
+        ]
+      });
+      console.log(`✅ Saved ace game ${game.id} in database (rows affected: ${result.rowsAffected})`);
+    } else if (type === 'rummy') {
+      const result = await db.execute({
+        sql: `INSERT OR REPLACE INTO games (id, type, title, createdAt, status, winner, maxPoints, data)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          game.id,
+          game.type,
+          game.title,
+          game.createdAt,
+          game.status,
+          game.winner || null,
+          game.maxPoints,
+          JSON.stringify(game)
+        ]
+      });
+      console.log(`✅ Saved rummy game ${game.id} in database (rows affected: ${result.rowsAffected})`);
+    } else {
+      console.error(`❌ Unknown game type: ${game.type}`);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving game:', error.message);
+    return false;
+  }
+}
+
 
 // Helper function for generic data operations
 export async function getData(key) {

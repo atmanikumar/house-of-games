@@ -153,8 +153,8 @@ export default function Home() {
             <p className={styles.subtitle}>Track your card game champions</p>
           </div>
           {isAdmin() && (
-            <button className="btn btn-primary" onClick={handleNewGame}>
-              ➕ New Game
+            <button className="btn btn-primary" onClick={handleNewGame} style={{ color: 'white' }}>
+              <span style={{ filter: 'brightness(0) invert(1)' }}>➕</span> New Game
             </button>
           )}
         </div>
