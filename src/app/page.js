@@ -22,27 +22,8 @@ export default function Home() {
     return player?.profilePhoto || null;
   };
 
-  // Show loading state
-  if (authLoading || gameLoading) {
-    return (
-      <div className={styles.home}>
-        <div className="container">
-          <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
-            <p style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>Loading...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirect to login if not authenticated
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
-
   // Memoize top players calculation to prevent blocking navigation
+  // MUST be before conditional returns to follow Rules of Hooks
   const topPlayers = useMemo(() => {
     // Filter games by type (case-insensitive to handle both old and new games)
     const filteredGames = games.filter(game => 
@@ -105,6 +86,26 @@ export default function Home() {
       .slice(0, 10),
     [games]
   );
+
+  // Show loading state - AFTER all hooks
+  if (authLoading || gameLoading) {
+    return (
+      <div className={styles.home}>
+        <div className="container">
+          <div className="card" style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+            <p style={{ fontSize: '18px', color: 'var(--text-secondary)' }}>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to login if not authenticated - AFTER all hooks
+  if (!user) {
+    router.push('/login');
+    return null;
+  }
 
   const handleNewGame = () => {
     if (players.length === 0) {
