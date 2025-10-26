@@ -11,7 +11,6 @@ export default function GamePage({ params }) {
   const { getGame, addRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, loading: gameLoading } = useGame();
   const { isAdmin, loading: authLoading } = useAuth();
   const [game, setGame] = useState(null);
-  const [users, setUsers] = useState([]);
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [showDeclareWinnerModal, setShowDeclareWinnerModal] = useState(false);
@@ -30,26 +29,10 @@ export default function GamePage({ params }) {
   const [selectedAcePlayer, setSelectedAcePlayer] = useState(null);
   const [selectedAceWinners, setSelectedAceWinners] = useState([]);
 
-  // Fetch users to get profile photos
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('/api/users');
-        if (response.ok) {
-          const data = await response.json();
-          setUsers(data);
-        }
-      } catch (error) {
-        // Silent fail
-      }
-    };
-    fetchUsers();
-  }, []);
-
-  // Helper function to get profile photo for a player
+  // Helper function to get profile photo for a player from players data
   const getPlayerProfilePhoto = (playerId) => {
-    const user = users.find(u => u.id === playerId);
-    return user?.profilePhoto || null;
+    const player = players.find(p => p.id === playerId);
+    return player?.profilePhoto || null;
   };
 
   // Update game whenever games context changes

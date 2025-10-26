@@ -15,28 +15,11 @@ export default function Home() {
   const [filterGameType, setFilterGameType] = useState('Rummy'); // Filter for top players
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [maxPoints, setMaxPoints] = useState(120);
-  const [users, setUsers] = useState([]);
 
-  // Fetch users to get profile photos
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('/api/users');
-        if (response.ok) {
-          const data = await response.json();
-          setUsers(data);
-        }
-      } catch (error) {
-        // Silent fail
-      }
-    };
-    fetchUsers();
-  }, []);
-
-  // Helper function to get profile photo for a player
+  // Helper function to get profile photo for a player from players data
   const getPlayerProfilePhoto = (playerId) => {
-    const user = users.find(u => u.id === playerId);
-    return user?.profilePhoto || null;
+    const player = players.find(p => p.id === playerId);
+    return player?.profilePhoto || null;
   };
 
   // Show loading state

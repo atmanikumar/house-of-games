@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import styles from './page.module.css';
@@ -8,23 +7,6 @@ import styles from './page.module.css';
 export default function HistoryPage() {
   const router = useRouter();
   const { games, players } = useGame();
-  const [users, setUsers] = useState([]);
-
-  // Fetch users to get profile photos
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('/api/users');
-        if (response.ok) {
-          const data = await response.json();
-          setUsers(data);
-        }
-      } catch (error) {
-        // Silent fail
-      }
-    };
-    fetchUsers();
-  }, []);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -48,8 +30,8 @@ export default function HistoryPage() {
   };
 
   const getPlayerProfilePhoto = (playerId) => {
-    const user = users.find(u => u.id === playerId);
-    return user?.profilePhoto || null;
+    const player = players.find(p => p.id === playerId);
+    return player?.profilePhoto || null;
   };
 
   const sortedGames = [...games].sort((a, b) => 
