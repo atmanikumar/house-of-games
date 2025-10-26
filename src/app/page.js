@@ -259,11 +259,11 @@ export default function Home() {
               <table className={styles.recentMatchesTable}>
                 <thead>
                   <tr>
-                    <th>Game</th>
-                    <th className={styles.hideOnMobile}>Type</th>
-                    <th>Date</th>
+                    <th className={styles.hideOnMobile}>Game</th>
+                    <th>Type</th>
+                    <th className={styles.hideOnMobile}>Date</th>
                     <th className={styles.hideOnMobile}>Players</th>
-                    <th className={styles.hideOnMobile}>Winner</th>
+                    <th>Winner</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -276,14 +276,11 @@ export default function Home() {
                       onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)'}
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
-                      <td>
+                      <td className={styles.hideOnMobile}>
                         <strong>{game.title}</strong>
-                        <div className={styles.mobileInfo}>
-                          <span className={styles.mobileType}>{game.type}</span>
-                        </div>
                       </td>
-                      <td className={styles.hideOnMobile}>{game.type}</td>
-                      <td className={styles.dateCell}>
+                      <td>{game.type}</td>
+                      <td className={styles.hideOnMobile}>
                         {new Date(game.createdAt).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
@@ -314,7 +311,7 @@ export default function Home() {
                           )}
                         </div>
                       </td>
-                      <td className={styles.hideOnMobile}>
+                      <td>
                         {game.winner ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             {getPlayerProfilePhoto(game.winner) ? (
