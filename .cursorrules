@@ -1,0 +1,161 @@
+# Vilayattu Veedu - Cursor AI Rules
+
+## Project Context
+This is a Next.js card game tracking application with Turso SQLite database for persistence.
+
+## 🚫 File Creation Rules
+
+### NEVER Create These Files (Unless Explicitly Requested):
+- README.md
+- CHANGELOG.md
+- CONTRIBUTING.md
+- LICENSE.md
+- Any .md documentation files
+- .txt summary files
+
+### Exception:
+Only create documentation files if the user explicitly says "create a README" or similar.
+
+## 🔐 Security Guidelines (Auto-Check Every Response)
+
+### Before Making Changes, Verify:
+1. **No Hardcoded Secrets**
+   - ❌ Never hardcode API keys, tokens, or passwords in code
+   - ✅ Always use environment variables
+   - ✅ Check that sensitive values are in .env.local (which is .gitignored)
+
+2. **No Exposed Endpoints**
+   - ❌ No unprotected delete/clear/admin endpoints
+   - ✅ All admin endpoints must check: `user.role === 'admin'`
+   - ✅ All endpoints must verify JWT token from cookies
+
+3. **Password Security**
+   - ✅ Always hash passwords with bcrypt
+   - ✅ Never log actual passwords (use [REDACTED])
+   - ✅ Never return passwords in API responses
+
+4. **SQL Injection Prevention**
+   - ✅ Always use parameterized queries
+   - ✅ Never concatenate user input into SQL
+   - ✅ Use `?` placeholders in SQL with args array
+
+5. **XSS Prevention**
+   - ✅ Never use dangerouslySetInnerHTML unless absolutely necessary
+   - ✅ Sanitize user input before rendering
+
+## 📂 Project Structure
+
+### Key Files:
+- `src/lib/turso.js` - Database client and operations
+- `src/lib/auth.js` - Authentication logic (JWT, bcrypt)
+- `src/lib/storage.js` - Storage layer (exports Turso functions)
+- `src/context/AuthContext.js` - Auth state management
+- `src/context/GameContext.js` - Game state management
+- `src/middleware.js` - Route protection
+
+### Database Tables:
+- `users` - Authentication (username, password, role, name, createdAt)
+- `players` - Game stats (id, name, avatar, wins, gamesPlayed, etc)
+- `games` - Game records (id, title, gameType, players, rounds, etc)
+
+### API Routes:
+- `/api/auth/login` - Login (no auth required)
+- `/api/auth/me` - Get current user (requires auth)
+- `/api/users` - User management (admin only)
+- `/api/players` - Player data (no auth, read-only)
+- `/api/games` - Game data (no auth)
+- `/api/init-db` - Initialize database tables
+
+## 🎨 UI/UX Guidelines
+
+### Styling:
+- Use CSS Modules (`.module.css`)
+- Dark theme with dark blue primary color
+- Responsive design (mobile-first)
+- Use emoji avatars for players
+
+### Components:
+- Use functional components with hooks
+- Use `useAuth()` for authentication state
+- Use `useGame()` for game state
+- Always check `isAdmin()` before showing admin features
+
+## 🔧 Environment Variables
+
+### Required in .env.local:
+```bash
+TURSO_DATABASE_URL=your-turso-url
+TURSO_AUTH_TOKEN=your-turso-token
+JWT_SECRET=your-secret-key
+```
+
+### NOT Required (Deprecated):
+- ADMIN_USERNAME ❌
+- ADMIN_PASSWORD ❌
+(Admin is now created in database on first run)
+
+## 🐛 Common Issues & Solutions
+
+### Issue: "no such table" errors
+**Solution:** Call `/api/init-db` to initialize tables
+
+### Issue: Users not persisting
+**Solution:** Check Turso credentials in .env.local
+
+### Issue: Login not working
+**Solution:** Clear cookies, refresh, ensure admin exists in DB
+
+## 📝 Code Quality Rules
+
+### When Editing Files:
+1. Preserve existing code style (tabs/spaces, quotes)
+2. Add comments for complex logic
+3. Use descriptive variable names
+4. Handle errors gracefully (try/catch)
+5. Add console.log for debugging (but remove before production)
+
+### When Creating New Features:
+1. Check if authentication is required
+2. Add proper error handling
+3. Return appropriate HTTP status codes
+4. Log errors to console
+5. Validate user input
+
+## 🚀 Deployment
+
+### Vercel Deployment:
+1. Push to GitHub
+2. Add environment variables in Vercel dashboard
+3. Deploy
+4. Visit `/api/init-db` once to initialize tables
+5. Login with initial credentials (mani/vilayadu)
+
+## ⚠️ Important Notes
+
+### Database Operations:
+- Turso operations are async - always use `await`
+- Use `String()` to convert values before inserting
+- Handle empty arrays gracefully
+
+### Authentication:
+- JWT tokens expire in 30 days
+- Cookies are httpOnly for security
+- Middleware checks all protected routes
+
+### Game Logic:
+- Max points default: 120
+- Players above max points are marked as "Lost"
+- Winner is last player below max points
+
+## 🎯 Project Goals
+
+1. **Simple UX** - Easy to use during actual card games
+2. **Fast Performance** - Quick round entry, instant updates
+3. **Reliable Storage** - Never lose game data
+4. **Mobile-Friendly** - Play on phones during games
+5. **Secure** - Protect user data and admin functions
+
+---
+
+**Remember:** Always prioritize security and user experience. When in doubt, ask the user before making breaking changes.
+
