@@ -123,7 +123,7 @@ export default function Home() {
     );
   };
 
-  const handleCreateGame = () => {
+  const handleCreateGame = async () => {
     // Chess requires exactly 2 players
     if (gameType === 'chess') {
       if (selectedPlayers.length !== 2) {
@@ -139,7 +139,7 @@ export default function Home() {
 
     // Chess and Ace games don't have max points
     const points = (gameType === 'chess' || gameType === 'ace') ? null : parseInt(maxPoints);
-    const game = createGame(gameType, selectedPlayers, points);
+    const game = await createGame(gameType, selectedPlayers, points);
     setShowNewGameModal(false);
     router.push(`/game/${game.id}`);
   };
@@ -258,12 +258,17 @@ export default function Home() {
                     <th className={styles.hideOnMobile}>Players</th>
                     <th className={styles.hideOnMobile}>Winner</th>
                     <th>Status</th>
-                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentMatches.map((game) => (
-                    <tr key={game.id}>
+                    <tr 
+                      key={game.id}
+                      onClick={() => router.push(`/game/${game.id}`)}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
                       <td>
                         <strong>{game.title}</strong>
                         <div className={styles.mobileInfo}>
@@ -311,15 +316,6 @@ export default function Home() {
                         }`}>
                           {game.status === 'completed' ? 'Completed' : 'In Progress'}
                         </span>
-                      </td>
-                      <td>
-                        <button 
-                          className="btn btn-secondary"
-                          style={{ padding: '6px 12px', fontSize: '14px' }}
-                          onClick={() => router.push(`/game/${game.id}`)}
-                        >
-                          View
-                        </button>
                       </td>
                     </tr>
                   ))}

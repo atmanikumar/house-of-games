@@ -20,6 +20,7 @@ export default function GamePage({ params }) {
   const [showEndAceGameModal, setShowEndAceGameModal] = useState(false);
   const [roundScores, setRoundScores] = useState({});
   const [droppedPlayers, setDroppedPlayers] = useState({});
+  const [winnerPlayers, setWinnerPlayers] = useState({});
   const [addPlayerError, setAddPlayerError] = useState('');
   const [updateMaxPointsError, setUpdateMaxPointsError] = useState('');
   const [newMaxPoints, setNewMaxPoints] = useState('');
@@ -56,7 +57,26 @@ export default function GamePage({ params }) {
       });
       setRoundScores(newScores);
       setDroppedPlayers({});
+      setWinnerPlayers({});
     }
+  };
+
+  // Helper function to count consecutive drops for a player
+  const getConsecutiveDrops = (playerId) => {
+    if (!game || !game.rounds || game.rounds.length === 0) return 0;
+    
+    let consecutiveDrops = 0;
+    // Check rounds from most recent backwards
+    for (let i = game.rounds.length - 1; i >= 0; i--) {
+      const round = game.rounds[i];
+      if (round.drops && round.drops[playerId] === true) {
+        consecutiveDrops++;
+      } else {
+        // If player didn't drop in this round, stop counting
+        break;
+      }
+    }
+    return consecutiveDrops;
   };
 
   const handleScoreChange = (playerId, score) => {
@@ -67,6 +87,14 @@ export default function GamePage({ params }) {
   };
 
   const handleDropToggle = (playerId) => {
+    // If marking as winner, unmark winner first
+    if (winnerPlayers[playerId]) {
+      setWinnerPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
     setDroppedPlayers(prev => ({
       ...prev,
       [playerId]: !prev[playerId]
@@ -87,22 +115,58 @@ export default function GamePage({ params }) {
     }
   };
 
+  const handleWinnerToggle = (playerId) => {
+    // If marked as dropped, unmark drop first
+    if (droppedPlayers[playerId]) {
+      setDroppedPlayers(prev => ({
+        ...prev,
+        [playerId]: false
+      }));
+    }
+    
+    setWinnerPlayers(prev => ({
+      ...prev,
+      [playerId]: !prev[playerId]
+    }));
+    
+    // If marking as winner, automatically set score to 0
+    if (!winnerPlayers[playerId]) {
+      setRoundScores(prev => ({
+        ...prev,
+        [playerId]: '0'
+      }));
+    } else {
+      // If un-marking winner, clear the score
+      setRoundScores(prev => ({
+        ...prev,
+        [playerId]: ''
+      }));
+    }
+  };
+
   const handleAddRound = () => {
-    // Convert empty strings to 0 before saving, but use 20 for dropped players
+    // Convert empty strings to 0 before saving, but use 20 for dropped players and 0 for winners
     const scoresWithDefaults = {};
     const dropInfo = {};
+    const winnerInfo = {};
     
     Object.keys(roundScores).forEach(playerId => {
       if (droppedPlayers[playerId]) {
         scoresWithDefaults[playerId] = 20; // Drop = 20 points
         dropInfo[playerId] = true;
+        winnerInfo[playerId] = false;
+      } else if (winnerPlayers[playerId]) {
+        scoresWithDefaults[playerId] = 0; // Winner = 0 points
+        dropInfo[playerId] = false;
+        winnerInfo[playerId] = true;
       } else {
         scoresWithDefaults[playerId] = parseInt(roundScores[playerId]) || 0;
         dropInfo[playerId] = false;
+        winnerInfo[playerId] = false;
       }
     });
     
-    addRound(params.id, scoresWithDefaults, dropInfo);
+    addRound(params.id, scoresWithDefaults, dropInfo, winnerInfo);
     
     // Reset scores for next round with empty strings
     resetRoundScores();
@@ -362,7 +426,7 @@ export default function GamePage({ params }) {
                   <tr>
                     <th>Player</th>
                     {!isChess && <th>{isAce ? 'Points Won' : 'Total Points'}</th>}
-                    {!isChess && !isAce && <th>Remaining</th>}
+                    {!isChess && !isAce && <th>Remaining (Max - Current)</th>}
                     {!isChess && !isAce && <th>Status</th>}
                   </tr>
                 </thead>
@@ -376,12 +440,43 @@ export default function GamePage({ params }) {
                         ? game.maxPoints - player.totalPoints 
                         : 0;
                       
+                      // Check if player has dropped 3 times consecutively
+                      const consecutiveDrops = getConsecutiveDrops(player.id);
+                      const mustPlayDueToDrops = !isChess && !isAce && !player.isLost && consecutiveDrops >= 3;
+                      
+                      // Check if player can't afford to drop (drop would exceed max points)
+                      const cannotAffordDrop = !isChess && !isAce && !player.isLost && 
+                                               (player.totalPoints + 20 >= game.maxPoints);
+                      
+                      // Highlight if either condition is true (only for active players)
+                      const mustPlay = mustPlayDueToDrops || cannotAffordDrop;
+                      
                       return (
-                        <tr key={player.id} className={player.isLost ? styles.lostPlayer : ''}>
+                        <tr 
+                          key={player.id} 
+                          className={player.isLost ? styles.lostPlayer : ''}
+                          style={{
+                            background: mustPlay 
+                              ? 'rgba(251, 191, 36, 0.15)' 
+                              : 'transparent',
+                            borderLeft: mustPlay 
+                              ? '4px solid var(--warning)' 
+                              : 'none'
+                          }}
+                        >
                           <td>
                             <div className={styles.playerCell}>
                               <span className="avatar">{player.avatar}</span>
                               <span>{player.name}</span>
+                              {mustPlay && (
+                                <span style={{ 
+                                  marginLeft: '8px', 
+                                  fontSize: '16px',
+                                  filter: 'grayscale(0)'
+                                }}>
+                                  ⚠️
+                                </span>
+                              )}
                             </div>
                           </td>
                           {!isChess && (
@@ -391,26 +486,14 @@ export default function GamePage({ params }) {
                           )}
                           {!isChess && !isAce && (
                             <td>
-                              <span style={{ 
-                                color: remainingPoints <= 0 ? 'var(--danger)' : 
-                                       remainingPoints <= 10 ? 'var(--warning)' : 
-                                       'var(--success)',
-                                fontWeight: '600'
-                              }}>
+                              <span style={{ fontWeight: '600' }}>
                                 {remainingPoints <= 0 ? 0 : remainingPoints}
                               </span>
                             </td>
                           )}
                           {!isChess && !isAce && (
                             <td>
-                              {player.isDropped ? (
-                                <span className="badge" style={{ 
-                                  background: 'var(--warning)', 
-                                  color: 'white' 
-                                }}>
-                                  Dropped
-                                </span>
-                              ) : player.isLost ? (
+                              {player.isLost ? (
                                 <span className="badge badge-danger">Eliminated</span>
                               ) : (
                                 <span className="badge badge-success">Active</span>
@@ -488,9 +571,11 @@ export default function GamePage({ params }) {
                             </span>
                             <strong>{event.playerName}</strong>
                           </span>
-                      <span className={styles.scoreValue} style={{ color: 'var(--success)' }}>
-                        {isAce ? `Joined with ${event.startingPoints} pts` : `Started with ${event.startingPoints} pts`}
-                      </span>
+                          {!isChess && (
+                            <span className={styles.scoreValue} style={{ color: 'var(--success)' }}>
+                              {isAce ? `Joined with ${event.startingPoints} pts` : `Started with ${event.startingPoints} pts`}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -540,6 +625,7 @@ export default function GamePage({ params }) {
                             const score = event.scores[player.id];
                             const isAceInRound = isAce && score === 0;
                             const hasDropped = event.drops && event.drops[player.id] === true;
+                            const isWinner = event.winners && event.winners[player.id] === true;
                             
                             return (
                               <div key={player.id} className={styles.scoreItem}>
@@ -562,10 +648,25 @@ export default function GamePage({ params }) {
                                       DROP
                                     </span>
                                   )}
+                                  {isWinner && (
+                                    <span style={{ 
+                                      marginLeft: '8px', 
+                                      fontSize: '11px',
+                                      padding: '2px 6px',
+                                      background: 'var(--success)',
+                                      color: 'white',
+                                      borderRadius: '4px',
+                                      fontWeight: '600'
+                                    }}>
+                                      ⚡ WINNER
+                                    </span>
+                                  )}
                                 </span>
-                                <span className={styles.scoreValue} style={isAceInRound ? { color: 'var(--danger)', fontWeight: '600' } : {}}>
-                                  {isAce ? (score === 0 ? 'ACE' : `+${score} pt${score !== 1 ? 's' : ''}`) : `${score} pts`}
-                                </span>
+                                {!isChess && (
+                                  <span className={styles.scoreValue} style={isAceInRound ? { color: 'var(--danger)', fontWeight: '600' } : {}}>
+                                    {isAce ? (score === 0 ? 'ACE' : `+${score} pt${score !== 1 ? 's' : ''}`) : `${score} pts`}
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
@@ -588,52 +689,108 @@ export default function GamePage({ params }) {
             <h2>📝 Add Round {game.rounds.length + 1} Points</h2>
             
             <div className={styles.scoreInputs}>
-              {game.players.filter(p => !p.isLost).map(player => (
-                <div key={player.id} className="form-group">
-                  <label>
-                    <span className="avatar" style={{ fontSize: '20px', marginRight: '8px' }}>
-                      {player.avatar}
-                    </span>
-                    {player.name}
-                  </label>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input 
-                      type="number" 
-                      value={roundScores[player.id] || ''}
-                      onChange={(e) => handleScoreChange(player.id, e.target.value)}
-                      onWheel={(e) => e.target.blur()}
-                      min="0"
-                      placeholder="Enter points"
-                      disabled={droppedPlayers[player.id]}
-                      style={{ flex: 1 }}
-                      autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
-                    />
-                    <label style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '6px',
-                      cursor: 'pointer',
-                      padding: '8px 12px',
-                      background: droppedPlayers[player.id] ? 'var(--danger)' : 'transparent',
-                      border: '2px solid var(--danger)',
-                      borderRadius: '6px',
-                      color: droppedPlayers[player.id] ? 'white' : 'var(--danger)',
-                      fontWeight: '600',
-                      fontSize: '14px',
-                      whiteSpace: 'nowrap',
-                      transition: 'all 0.2s'
-                    }}>
-                      <input 
-                        type="checkbox"
-                        checked={droppedPlayers[player.id] || false}
-                        onChange={() => handleDropToggle(player.id)}
-                        style={{ display: 'none' }}
-                      />
-                      {droppedPlayers[player.id] ? '✓ Drop (20 pts)' : 'Drop?'}
+              {game.players.filter(p => !p.isLost).map(player => {
+                const consecutiveDrops = getConsecutiveDrops(player.id);
+                const canAffordDrop = player.totalPoints + 20 < game.maxPoints;
+                const canDrop = consecutiveDrops < 3 && canAffordDrop;
+                
+                return (
+                  <div key={player.id} className="form-group">
+                    <label>
+                      <span className="avatar" style={{ fontSize: '20px', marginRight: '8px' }}>
+                        {player.avatar}
+                      </span>
+                      {player.name}
                     </label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch', flexWrap: 'nowrap' }}>
+                      <input 
+                        type="number" 
+                        value={roundScores[player.id] || ''}
+                        onChange={(e) => handleScoreChange(player.id, e.target.value)}
+                        onWheel={(e) => e.target.blur()}
+                        min="0"
+                        placeholder="Enter points"
+                        disabled={droppedPlayers[player.id] || winnerPlayers[player.id]}
+                        style={{ flex: '1', minWidth: '0' }}
+                        autoFocus={player.id === game.players.filter(p => !p.isLost)[0]?.id}
+                      />
+                      <label style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        gap: '6px',
+                        cursor: 'pointer',
+                        padding: '8px 12px',
+                        background: winnerPlayers[player.id] ? 'var(--success)' : 'transparent',
+                        border: '2px solid var(--success)',
+                        borderRadius: '6px',
+                        color: winnerPlayers[player.id] ? 'white' : 'var(--success)',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.2s',
+                        flexShrink: '0',
+                        marginBottom: '0'
+                      }}>
+                        <input 
+                          type="checkbox"
+                          checked={winnerPlayers[player.id] || false}
+                          onChange={() => handleWinnerToggle(player.id)}
+                          style={{ display: 'none' }}
+                        />
+                        {winnerPlayers[player.id] ? '✓ Winner (0 pts)' : '⚡ Winner'}
+                      </label>
+                      {canDrop ? (
+                        <label style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          gap: '6px',
+                          cursor: 'pointer',
+                          padding: '8px 12px',
+                          background: droppedPlayers[player.id] ? 'var(--danger)' : 'transparent',
+                          border: '2px solid var(--danger)',
+                          borderRadius: '6px',
+                          color: droppedPlayers[player.id] ? 'white' : 'var(--danger)',
+                          fontWeight: '600',
+                          fontSize: '14px',
+                          whiteSpace: 'nowrap',
+                          transition: 'all 0.2s',
+                          flexShrink: '0',
+                          marginBottom: '0'
+                        }}>
+                          <input 
+                            type="checkbox"
+                            checked={droppedPlayers[player.id] || false}
+                            onChange={() => handleDropToggle(player.id)}
+                            style={{ display: 'none' }}
+                          />
+                          {droppedPlayers[player.id] ? '✓ Drop (20 pts)' : 'Drop?'}
+                        </label>
+                      ) : (
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '8px 12px',
+                          background: 'rgba(251, 191, 36, 0.1)',
+                          border: '2px solid var(--warning)',
+                          borderRadius: '6px',
+                          color: 'var(--warning)',
+                          fontWeight: '600',
+                          fontSize: '14px',
+                          whiteSpace: 'nowrap',
+                          flexShrink: '0',
+                          marginBottom: '0'
+                        }}>
+                          ⚠️ Must Play
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className={styles.modalActions}>

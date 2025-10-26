@@ -80,14 +80,24 @@ export default function HistoryPage() {
                     <span className={styles.infoLabel}>Type:</span>
                     <span className={styles.infoValue}>{game.type}</span>
                   </div>
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Players:</span>
-                    <span className={styles.infoValue}>{game.players.length}</span>
-                  </div>
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Rounds:</span>
-                    <span className={styles.infoValue}>{game.rounds.length}</span>
-                  </div>
+                  {game.type.toLowerCase() !== 'chess' && (
+                    <>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Players:</span>
+                        <span className={styles.infoValue}>{game.players.length}</span>
+                      </div>
+                      <div className={styles.infoItem}>
+                        <span className={styles.infoLabel}>Rounds:</span>
+                        <span className={styles.infoValue}>{game.rounds.length}</span>
+                      </div>
+                      {game.type.toLowerCase() === 'rummy' && game.maxPoints && (
+                        <div className={styles.infoItem}>
+                          <span className={styles.infoLabel}>Max Points:</span>
+                          <span className={styles.infoValue}>{game.maxPoints}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {game.status === 'completed' && (game.winner || (game.winners && game.winners.length > 0)) && (
@@ -130,15 +140,17 @@ export default function HistoryPage() {
                           {player.avatar}
                         </span>
                         <span className={styles.playerChipName}>{player.name}</span>
-                        <span className={styles.playerPoints}>
-                          {player.totalPoints} pts
-                        </span>
+                        {game.type.toLowerCase() !== 'chess' && (
+                          <span className={styles.playerPoints}>
+                            {player.totalPoints} pts
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {game.rounds.length > 0 && (
+                {game.type.toLowerCase() !== 'chess' && game.rounds.length > 0 && (
                   <div className={styles.roundsSummary}>
                     <p className={styles.roundsLabel}>Latest Rounds:</p>
                     <div className={styles.roundsList}>

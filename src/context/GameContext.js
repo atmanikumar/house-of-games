@@ -284,7 +284,7 @@ export function GameProvider({ children }) {
     return { success: true };
   };
 
-  const addRound = (gameId, roundScores, dropInfo = {}) => {
+  const addRound = (gameId, roundScores, dropInfo = {}, winnerInfo = {}) => {
     const game = games.find(g => g.id === gameId);
     if (!game) return;
     
@@ -296,6 +296,7 @@ export function GameProvider({ children }) {
       roundNumber: game.rounds.length + 1,
       scores: roundScores,
       drops: dropInfo, // Track which players dropped in this round
+      winners: winnerInfo, // Track which players won (got 0 points) in this round
       timestamp: new Date().toISOString()
     };
 
