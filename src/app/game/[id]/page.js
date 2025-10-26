@@ -11,6 +11,7 @@ export default function GamePage({ params }) {
   const { getGame, addRound, addPlayerToGame, declareWinner, declareDraw, updateMaxPoints, declareAceWinners, players, games, loading: gameLoading } = useGame();
   const { isAdmin, loading: authLoading } = useAuth();
   const [game, setGame] = useState(null);
+  const [users, setUsers] = useState([]);
   const [showAddRoundModal, setShowAddRoundModal] = useState(false);
   const [showAddPlayerModal, setShowAddPlayerModal] = useState(false);
   const [showDeclareWinnerModal, setShowDeclareWinnerModal] = useState(false);
@@ -28,6 +29,28 @@ export default function GamePage({ params }) {
   const [selectedWinner, setSelectedWinner] = useState(null);
   const [selectedAcePlayer, setSelectedAcePlayer] = useState(null);
   const [selectedAceWinners, setSelectedAceWinners] = useState([]);
+
+  // Fetch users to get profile photos
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users');
+        if (response.ok) {
+          const data = await response.json();
+          setUsers(data);
+        }
+      } catch (error) {
+        // Silent fail
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  // Helper function to get profile photo for a player
+  const getPlayerProfilePhoto = (playerId) => {
+    const user = users.find(u => u.id === playerId);
+    return user?.profilePhoto || null;
+  };
 
   // Update game whenever games context changes
   useEffect(() => {
@@ -338,13 +361,45 @@ export default function GamePage({ params }) {
                       🤝 Game ended in a Draw 🤝
                     </>
                   ) : game.winners && game.winners.length > 1 ? (
-                    <>
-                      🎉 Winners: {game.winners.map(wId => game.players.find(p => p.id === wId)?.name).join(', ')} 🎉
-                    </>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                      <span>🎉 Winners:</span>
+                      {game.winners.map((wId, index) => {
+                        const winner = game.players.find(p => p.id === wId);
+                        return (
+                          <span key={wId} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {getPlayerProfilePhoto(wId) ? (
+                              <img 
+                                src={getPlayerProfilePhoto(wId)} 
+                                alt={winner?.name}
+                                className={styles.winnerAvatar}
+                              />
+                            ) : (
+                              <span className="avatar" style={{ fontSize: '28px' }}>{winner?.avatar}</span>
+                            )}
+                            <span>{winner?.name}</span>
+                            {index < game.winners.length - 1 && ','}
+                          </span>
+                        );
+                      })}
+                      <span>🎉</span>
+                    </div>
                   ) : (
-                    <>
-                      🎉 Winner: {game.players.find(p => p.id === game.winner)?.name} 🎉
-                    </>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                      <span>🎉 Winner:</span>
+                      {getPlayerProfilePhoto(game.winner) ? (
+                        <img 
+                          src={getPlayerProfilePhoto(game.winner)} 
+                          alt={game.players.find(p => p.id === game.winner)?.name}
+                          className={styles.winnerAvatar}
+                        />
+                      ) : (
+                        <span className="avatar" style={{ fontSize: '28px' }}>
+                          {game.players.find(p => p.id === game.winner)?.avatar}
+                        </span>
+                      )}
+                      <span>{game.players.find(p => p.id === game.winner)?.name}</span>
+                      <span>🎉</span>
+                    </div>
                   )}
                 </div>
               )}
@@ -418,7 +473,7 @@ export default function GamePage({ params }) {
           {/* Current Standings */}
           <div className="card">
             <h2 className={styles.sectionTitle}>
-              {isChess ? 'Players' : isAce ? 'Players (Points Won)' : 'Current Standings'}
+              {isChess ? 'Players' : isAce ? 'Players (Points Won)' : game.status === 'completed' ? 'Final Standings' : 'Current Standings'}
             </h2>
             <div className="table-container">
               <table>
@@ -426,7 +481,7 @@ export default function GamePage({ params }) {
                   <tr>
                     <th>Player</th>
                     {!isChess && <th>{isAce ? 'Points Won' : 'Total Points'}</th>}
-                    {!isChess && !isAce && <th>Remaining (Max - Current)</th>}
+                    {!isChess && !isAce && <th>Remaining</th>}
                     {!isChess && !isAce && <th>Status</th>}
                   </tr>
                 </thead>
@@ -466,7 +521,15 @@ export default function GamePage({ params }) {
                         >
                           <td>
                             <div className={styles.playerCell}>
-                              <span className="avatar">{player.avatar}</span>
+                              {getPlayerProfilePhoto(player.id) ? (
+                                <img 
+                                  src={getPlayerProfilePhoto(player.id)} 
+                                  alt={player.name}
+                                  className={styles.playerAvatar}
+                                />
+                              ) : (
+                                <span className="avatar">{player.avatar}</span>
+                              )}
                               <span>{player.name}</span>
                               {mustPlay && (
                                 <span style={{ 
@@ -495,6 +558,8 @@ export default function GamePage({ params }) {
                             <td>
                               {player.isLost ? (
                                 <span className="badge badge-danger">Eliminated</span>
+                              ) : game.status === 'completed' ? (
+                                <span className="badge badge-success">Winner</span>
                               ) : (
                                 <span className="badge badge-success">Active</span>
                               )}
@@ -566,9 +631,17 @@ export default function GamePage({ params }) {
                       <div className={styles.roundScores}>
                         <div className={styles.scoreItem}>
                           <span className={styles.playerName}>
-                            <span className="avatar" style={{ fontSize: '24px' }}>
-                              {event.playerAvatar}
-                            </span>
+                            {getPlayerProfilePhoto(event.playerId) ? (
+                              <img 
+                                src={getPlayerProfilePhoto(event.playerId)} 
+                                alt={event.playerName}
+                                className={styles.playerAvatar}
+                              />
+                            ) : (
+                              <span className="avatar" style={{ fontSize: '24px' }}>
+                                {event.playerAvatar}
+                              </span>
+                            )}
                             <strong>{event.playerName}</strong>
                           </span>
                           {!isChess && (
@@ -630,9 +703,17 @@ export default function GamePage({ params }) {
                             return (
                               <div key={player.id} className={styles.scoreItem}>
                                 <span className={styles.playerName}>
-                                  <span className="avatar" style={{ fontSize: '20px' }}>
-                                    {player.avatar}
-                                  </span>
+                                  {getPlayerProfilePhoto(player.id) ? (
+                                    <img 
+                                      src={getPlayerProfilePhoto(player.id)} 
+                                      alt={player.name}
+                                      className={styles.playerAvatar}
+                                    />
+                                  ) : (
+                                    <span className="avatar" style={{ fontSize: '20px' }}>
+                                      {player.avatar}
+                                    </span>
+                                  )}
                                   {player.name}
                                   {isAceInRound && <span style={{ marginLeft: '8px', color: 'var(--danger)' }}>🎯</span>}
                                   {hasDropped && (
@@ -697,9 +778,18 @@ export default function GamePage({ params }) {
                 return (
                   <div key={player.id} className="form-group">
                     <label>
-                      <span className="avatar" style={{ fontSize: '20px', marginRight: '8px' }}>
-                        {player.avatar}
-                      </span>
+                      {getPlayerProfilePhoto(player.id) ? (
+                        <img 
+                          src={getPlayerProfilePhoto(player.id)} 
+                          alt={player.name}
+                          className={styles.playerAvatar}
+                          style={{ marginRight: '8px' }}
+                        />
+                      ) : (
+                        <span className="avatar" style={{ fontSize: '20px', marginRight: '8px' }}>
+                          {player.avatar}
+                        </span>
+                      )}
                       {player.name}
                     </label>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch', flexWrap: 'nowrap' }}>
@@ -850,7 +940,15 @@ export default function GamePage({ params }) {
                     }`}
                     onClick={() => setSelectedPlayerToAdd(player.id)}
                   >
-                    <span className="avatar">{player.avatar}</span>
+                    {getPlayerProfilePhoto(player.id) ? (
+                      <img 
+                        src={getPlayerProfilePhoto(player.id)} 
+                        alt={player.name}
+                        className={styles.playerAvatar}
+                      />
+                    ) : (
+                      <span className="avatar">{player.avatar}</span>
+                    )}
                     <span>{player.name}</span>
                     {selectedPlayerToAdd === player.id && <span>✓</span>}
                   </div>
@@ -903,7 +1001,15 @@ export default function GamePage({ params }) {
                   }`}
                   onClick={() => setSelectedWinner(player.id)}
                 >
-                  <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  {getPlayerProfilePhoto(player.id) ? (
+                    <img 
+                      src={getPlayerProfilePhoto(player.id)} 
+                      alt={player.name}
+                      className={styles.playerAvatar}
+                    />
+                  ) : (
+                    <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  )}
                   <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
                   {selectedWinner === player.id && <span style={{ fontSize: '20px' }}>✓</span>}
                 </div>
@@ -954,7 +1060,15 @@ export default function GamePage({ params }) {
                   className={styles.playerItem}
                   style={{ cursor: 'default', opacity: 0.8 }}
                 >
-                  <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  {getPlayerProfilePhoto(player.id) ? (
+                    <img 
+                      src={getPlayerProfilePhoto(player.id)} 
+                      alt={player.name}
+                      className={styles.playerAvatar}
+                    />
+                  ) : (
+                    <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  )}
                   <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
                 </div>
               ))}
@@ -1045,9 +1159,18 @@ export default function GamePage({ params }) {
                   }}
                 >
                   <span>
-                    <span className="avatar" style={{ fontSize: '16px', marginRight: '6px' }}>
-                      {player.avatar}
-                    </span>
+                    {getPlayerProfilePhoto(player.id) ? (
+                      <img 
+                        src={getPlayerProfilePhoto(player.id)} 
+                        alt={player.name}
+                        className={styles.playerAvatarSmall}
+                        style={{ marginRight: '6px' }}
+                      />
+                    ) : (
+                      <span className="avatar" style={{ fontSize: '16px', marginRight: '6px' }}>
+                        {player.avatar}
+                      </span>
+                    )}
                     {player.name}
                   </span>
                   <span style={{ fontWeight: '600' }}>
@@ -1101,7 +1224,15 @@ export default function GamePage({ params }) {
                   }`}
                   onClick={() => setSelectedAcePlayer(player.id)}
                 >
-                  <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  {getPlayerProfilePhoto(player.id) ? (
+                    <img 
+                      src={getPlayerProfilePhoto(player.id)} 
+                      alt={player.name}
+                      className={styles.playerAvatar}
+                    />
+                  ) : (
+                    <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  )}
                   <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
                   <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
                     ({player.totalPoints} pts)
@@ -1155,7 +1286,15 @@ export default function GamePage({ params }) {
                   }`}
                   onClick={() => toggleAceWinner(player.id)}
                 >
-                  <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  {getPlayerProfilePhoto(player.id) ? (
+                    <img 
+                      src={getPlayerProfilePhoto(player.id)} 
+                      alt={player.name}
+                      className={styles.playerAvatar}
+                    />
+                  ) : (
+                    <span className="avatar" style={{ fontSize: '24px' }}>{player.avatar}</span>
+                  )}
                   <span style={{ fontSize: '16px', fontWeight: '500' }}>{player.name}</span>
                   <span style={{ fontSize: '14px', color: 'var(--success)', fontWeight: '600' }}>
                     {player.totalPoints} pts

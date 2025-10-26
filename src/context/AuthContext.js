@@ -25,7 +25,6 @@ export function AuthProvider({ children }) {
         setUser(null);
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
       setUser(null);
     } finally {
       setLoading(false);
@@ -51,7 +50,6 @@ export function AuthProvider({ children }) {
         return { success: false, error: data.error };
       }
     } catch (error) {
-      console.error('Login failed:', error);
       return { success: false, error: 'Login failed' };
     }
   };
@@ -62,7 +60,7 @@ export function AuthProvider({ children }) {
       setUser(null);
       router.push('/login');
     } catch (error) {
-      console.error('Logout failed:', error);
+      // Silent fail
     }
   };
 

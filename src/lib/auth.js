@@ -31,7 +31,8 @@ export function generateToken(user) {
       id: user.id, 
       username: user.username, 
       role: user.role,
-      name: user.name 
+      name: user.name,
+      profilePhoto: user.profilePhoto || null
     },
     JWT_SECRET,
     { expiresIn: '30d' }

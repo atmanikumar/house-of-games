@@ -17,8 +17,6 @@ export function middleware(request) {
   const rateLimitResult = checkRateLimit(ip);
   
   if (!rateLimitResult.allowed) {
-    console.log(`🚫 Rate limit blocked request from IP: ${ip}`);
-    
     // Return 429 Too Many Requests
     return new NextResponse(
       JSON.stringify({

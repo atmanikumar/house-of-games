@@ -75,8 +75,6 @@ export function checkApiRateLimit(request) {
     ipData.blocked = true;
     ipData.blockedUntil = now + 5 * 60 * 1000;
     
-    console.log(`🚫 API Rate limit exceeded for IP: ${ip}`);
-    
     return NextResponse.json(
       {
         error: 'Too Many Requests',

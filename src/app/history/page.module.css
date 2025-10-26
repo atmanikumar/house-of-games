@@ -3,6 +3,23 @@
   padding: 40px 0;
 }
 
+.playerAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--primary);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.playerAvatarSmall {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--primary);
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -131,6 +148,15 @@
 .winnerName {
   font-weight: 700;
   color: var(--text);
+}
+
+.winnerAvatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--success);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
 }
 
 .playersList {

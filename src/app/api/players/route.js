@@ -7,7 +7,6 @@ export async function GET() {
     const players = await getPlayers();
     return NextResponse.json(players);
   } catch (error) {
-    console.error('Error fetching players:', error);
     return NextResponse.json([], { status: 500 });
   }
 }

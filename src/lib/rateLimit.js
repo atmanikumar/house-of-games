@@ -61,8 +61,6 @@ export function checkRateLimit(ip) {
     ipData.blocked = true;
     ipData.blockedUntil = now + 5 * 60 * 1000;
     
-    console.log(`🚫 Rate limit exceeded for IP: ${ip}. Blocked for 5 minutes.`);
-    
     return {
       allowed: false,
       remaining: 0,

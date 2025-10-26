@@ -9,6 +9,7 @@ export default function UsersPage() {
   const router = useRouter();
   const { user, isAdmin, loading } = useAuth();
   const [users, setUsers] = useState([]);
+  const [players, setPlayers] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
@@ -27,6 +28,7 @@ export default function UsersPage() {
         router.push('/');
       } else {
         fetchUsers();
+        fetchPlayers();
       }
     }
   }, [user, loading, router, isAdmin]);
@@ -39,9 +41,21 @@ export default function UsersPage() {
         setUsers(data);
       }
     } catch (error) {
-      console.error('Error fetching users:', error);
+      // Silent fail
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchPlayers = async () => {
+    try {
+      const response = await fetch('/api/players');
+      if (response.ok) {
+        const data = await response.json();
+        setPlayers(data);
+      }
+    } catch (error) {
+      // Silent fail
     }
   };
 
@@ -112,7 +126,20 @@ export default function UsersPage() {
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id}>
-                    <td><strong>{u.name}</strong></td>
+                    <td>
+                      <div className={styles.userCell}>
+                        {u.profilePhoto ? (
+                          <img 
+                            src={u.profilePhoto} 
+                            alt={u.name}
+                            className={styles.userAvatar}
+                          />
+                        ) : (
+                          <span className="avatar">{players.find(p => p.id === u.id)?.avatar || '👤'}</span>
+                        )}
+                        <strong>{u.name}</strong>
+                      </div>
+                    </td>
                     <td>{u.username}</td>
                     <td>
                       <span className={`badge ${

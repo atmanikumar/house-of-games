@@ -9,6 +9,8 @@ export {
   getGames,
   saveGames,
   updateGameInDB,
-  initDatabase
+  initDatabase,
+  updateUserProfilePhoto,
+  getUserById
 } from './turso';
 

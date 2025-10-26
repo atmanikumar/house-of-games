@@ -17,7 +17,6 @@ const GameContext = createContext();
 // Helper function to save data to server
 const saveToServer = async (key, data) => {
   try {
-    console.log(`💾 Saving ${key}:`, data.length || 0, 'items');
     const response = await fetch(`/api/${key}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -25,15 +24,11 @@ const saveToServer = async (key, data) => {
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`❌ Failed to save ${key}:`, response.status, errorData);
       return false;
     }
     
-    console.log(`✅ Successfully saved ${key}`);
     return true;
   } catch (error) {
-    console.error(`❌ Error saving ${key}:`, error.message, error);
     // Fallback to localStorage if API fails (local development)
     if (typeof window !== 'undefined') {
       localStorage.setItem(key, JSON.stringify(data));
@@ -45,7 +40,6 @@ const saveToServer = async (key, data) => {
 // Helper function to create a new game on server
 const createGameOnServer = async (game) => {
   try {
-    console.log(`➕ Creating game ${game.id} (${game.type})...`);
     const response = await fetch(`/api/games`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -53,15 +47,11 @@ const createGameOnServer = async (game) => {
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`❌ Failed to create game:`, response.status, errorData);
       return false;
     }
     
-    console.log(`✅ Successfully created game ${game.id}`);
     return true;
   } catch (error) {
-    console.error(`❌ Error creating game:`, error.message, error);
     return false;
   }
 };
@@ -69,7 +59,6 @@ const createGameOnServer = async (game) => {
 // Helper function to update a single game
 const updateGameOnServer = async (game) => {
   try {
-    console.log(`🔄 Updating game ${game.id} (${game.type})...`);
     const response = await fetch(`/api/games`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -77,15 +66,11 @@ const updateGameOnServer = async (game) => {
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error(`❌ Failed to update game:`, response.status, errorData);
       return false;
     }
     
-    console.log(`✅ Successfully updated game ${game.id}`);
     return true;
   } catch (error) {
-    console.error(`❌ Error updating game:`, error.message, error);
     return false;
   }
 };
@@ -98,7 +83,7 @@ const loadFromServer = async (key) => {
       return await response.json();
     }
   } catch (error) {
-    console.error(`Error loading ${key}:`, error);
+    // Silent fail
   }
   return [];
 };
@@ -192,11 +177,7 @@ export function GameProvider({ children }) {
     setGames(updatedGames);
     
     // Create new game on server (await to ensure it completes)
-    const result = await createGameOnServer(newGame);
-    
-    if (!result) {
-      console.error('❌ Failed to create game on server');
-    }
+    await createGameOnServer(newGame);
     
     return newGame;
   };

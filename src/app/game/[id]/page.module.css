@@ -54,6 +54,15 @@
   animation: pulse 2s infinite;
 }
 
+.winnerAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
@@ -180,6 +189,24 @@
   border-color: var(--primary);
   transform: scale(1.02);
   background: var(--surface);
+}
+
+.playerAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--primary);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+}
+
+.playerAvatarSmall {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--primary);
+  vertical-align: middle;
 }
 
 @media (max-width: 768px) {

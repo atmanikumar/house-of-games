@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import { useAuth } from '@/context/AuthContext';
@@ -15,6 +15,29 @@ export default function Home() {
   const [filterGameType, setFilterGameType] = useState('Rummy'); // Filter for top players
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [maxPoints, setMaxPoints] = useState(120);
+  const [users, setUsers] = useState([]);
+
+  // Fetch users to get profile photos
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users');
+        if (response.ok) {
+          const data = await response.json();
+          setUsers(data);
+        }
+      } catch (error) {
+        // Silent fail
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  // Helper function to get profile photo for a player
+  const getPlayerProfilePhoto = (playerId) => {
+    const user = users.find(u => u.id === playerId);
+    return user?.profilePhoto || null;
+  };
 
   // Show loading state
   if (authLoading || gameLoading) {
@@ -43,13 +66,6 @@ export default function Home() {
           game.type.toLowerCase() === gameTypeFilter.toLowerCase() && 
           game.status === 'completed'
         );
-        
-        console.log('🔍 Filtering games:', { 
-          gameTypeFilter, 
-          totalGames: games.length, 
-          filteredCount: filteredGames.length,
-          allGameTypes: games.map(g => ({ type: g.type, status: g.status }))
-        });
         
         // Calculate stats for each player in filtered games
         const playerStatsMap = {};
@@ -221,7 +237,15 @@ export default function Home() {
                       </td>
                       <td>
                         <div className={styles.playerCell}>
-                          <span className="avatar">{player.avatar}</span>
+                          {getPlayerProfilePhoto(player.id) ? (
+                            <img 
+                              src={getPlayerProfilePhoto(player.id)} 
+                              alt={player.name}
+                              className={styles.playerAvatar}
+                            />
+                          ) : (
+                            <span className="avatar">{player.avatar}</span>
+                          )}
                           <span>{player.name}</span>
                         </div>
                       </td>
@@ -287,9 +311,18 @@ export default function Home() {
                       <td className={styles.hideOnMobile}>
                         <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                           {game.players.slice(0, 3).map(p => (
-                            <span key={p.id} className="avatar" style={{ fontSize: '16px' }}>
-                              {p.avatar}
-                            </span>
+                            getPlayerProfilePhoto(p.id) ? (
+                              <img 
+                                key={p.id}
+                                src={getPlayerProfilePhoto(p.id)} 
+                                alt={p.name}
+                                className={styles.playerAvatarSmall}
+                              />
+                            ) : (
+                              <span key={p.id} className="avatar" style={{ fontSize: '16px' }}>
+                                {p.avatar}
+                              </span>
+                            )
                           ))}
                           {game.players.length > 3 && (
                             <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -301,9 +334,17 @@ export default function Home() {
                       <td className={styles.hideOnMobile}>
                         {game.winner ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="avatar" style={{ fontSize: '20px' }}>
-                              {game.players.find(p => p.id === game.winner)?.avatar}
-                            </span>
+                            {getPlayerProfilePhoto(game.winner) ? (
+                              <img 
+                                src={getPlayerProfilePhoto(game.winner)} 
+                                alt={game.players.find(p => p.id === game.winner)?.name}
+                                className={styles.playerAvatar}
+                              />
+                            ) : (
+                              <span className="avatar" style={{ fontSize: '20px' }}>
+                                {game.players.find(p => p.id === game.winner)?.avatar}
+                              </span>
+                            )}
                             <span>{game.players.find(p => p.id === game.winner)?.name}</span>
                           </div>
                         ) : (
@@ -374,7 +415,15 @@ export default function Home() {
                       handlePlayerToggle(player.id);
                     }}
                   >
-                    <span className="avatar">{player.avatar}</span>
+                    {getPlayerProfilePhoto(player.id) ? (
+                      <img 
+                        src={getPlayerProfilePhoto(player.id)} 
+                        alt={player.name}
+                        className={styles.playerAvatar}
+                      />
+                    ) : (
+                      <span className="avatar">{player.avatar}</span>
+                    )}
                     <span>{player.name}</span>
                     {selectedPlayers.includes(player.id) && <span>✓</span>}
                   </div>

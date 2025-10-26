@@ -10,39 +10,31 @@ export function getTursoClient() {
         url: process.env.TURSO_DATABASE_URL || '',
         authToken: process.env.TURSO_AUTH_TOKEN || '',
       });
-      console.log('✅ Connected to Turso database');
     } catch (error) {
-      console.error('❌ Turso connection error:', error.message);
       return null;
     }
   }
   return client;
 }
 
-// Initialize database tables (migration only - add isDraw column)
+// Initialize database tables (migration only - add profilePhoto column)
 export async function initDatabase() {
   const db = getTursoClient();
   if (!db) return false;
 
   try {
-    // Add isDraw column to existing chess_games table (migration)
+    // Add profilePhoto column to users table (migration)
     try {
-      await db.execute(`ALTER TABLE chess_games ADD COLUMN isDraw INTEGER DEFAULT 0`);
-      console.log('✅ Added isDraw column to chess_games table');
+      await db.execute(`ALTER TABLE users ADD COLUMN profilePhoto TEXT`);
     } catch (error) {
       // Column already exists, ignore the error
-      if (error.message.includes('duplicate column') || error.message.includes('already exists')) {
-        console.log('ℹ️  isDraw column already exists in chess_games table');
-      } else {
-        console.error('❌ Error adding isDraw column:', error.message);
+      if (!error.message.includes('duplicate column') && !error.message.includes('already exists')) {
         throw error;
       }
     }
 
-    console.log('✅ Database migration completed');
     return true;
   } catch (error) {
-    console.error('❌ Database migration error:', error.message);
     return false;
   }
 }
@@ -60,10 +52,10 @@ export async function getUsers() {
       password: row.password,
       name: row.name,
       role: row.role,
-      createdAt: row.createdAt
+      createdAt: row.createdAt,
+      profilePhoto: row.profilePhoto || null
     }));
   } catch (error) {
-    console.error('Error fetching users:', error.message);
     return [];
   }
 }
@@ -71,7 +63,6 @@ export async function getUsers() {
 export async function saveUsers(users) {
   const db = getTursoClient();
   if (!db) {
-    console.error('❌ Database client not available');
     return false;
   }
 
@@ -88,29 +79,27 @@ export async function saveUsers(users) {
         password: String(user.password || ''),
         name: String(user.name || ''),
         role: String(user.role || 'player'),
-        createdAt: String(user.createdAt || new Date().toISOString())
+        createdAt: String(user.createdAt || new Date().toISOString()),
+        profilePhoto: user.profilePhoto ? String(user.profilePhoto) : null
       };
       
-      console.log(`💾 Inserting user: ${safeUser.username} (${safeUser.id})`);
-      
       await db.execute({
-        sql: `INSERT INTO users (id, username, password, name, role, createdAt) 
-              VALUES (?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO users (id, username, password, name, role, createdAt, profilePhoto) 
+              VALUES (?, ?, ?, ?, ?, ?, ?)`,
         args: [
           safeUser.id,
           safeUser.username,
           safeUser.password,
           safeUser.name,
           safeUser.role,
-          safeUser.createdAt
+          safeUser.createdAt,
+          safeUser.profilePhoto
         ]
       });
     }
     
-    console.log(`✅ Saved ${users.length} users to database`);
     return true;
   } catch (error) {
-    console.error('❌ Error saving users:', error.message, error);
     return false;
   }
 }
@@ -133,7 +122,6 @@ export async function getPlayers() {
       rank: row.rank || 0
     }));
   } catch (error) {
-    console.error('Error fetching players:', error.message);
     return [];
   }
 }
@@ -168,10 +156,8 @@ export async function savePlayers(players) {
       });
     }
     
-    console.log(`✅ Saved ${uniquePlayers.length} players to database`);
     return true;
   } catch (error) {
-    console.error('Error saving players:', error.message, error);
     return false;
   }
 }
@@ -231,7 +217,6 @@ export async function getGames() {
     // Combine all arrays
     return [...rummyGames, ...chessGames, ...aceGames];
   } catch (error) {
-    console.error('Error fetching games:', error.message);
     return [];
   }
 }
@@ -317,10 +302,8 @@ export async function saveGames(games) {
       });
     }
     
-    console.log(`✅ Saved ${rummyGames.length} rummy, ${chessGames.length} chess, and ${aceGames.length} ace games to database`);
     return true;
   } catch (error) {
-    console.error('Error saving games:', error.message);
     return false;
   }
 }
@@ -336,7 +319,6 @@ export async function updateGameInDB(game) {
     if (type === 'chess') {
       // Chess requires exactly 2 players
       if (game.players.length !== 2) {
-        console.error(`❌ Chess game must have exactly 2 players, got ${game.players.length}`);
         return false;
       }
       
@@ -362,7 +344,6 @@ export async function updateGameInDB(game) {
           game.players[1].avatar
         ]
       });
-      console.log(`✅ Saved chess game ${game.id} in database (rows affected: ${result.rowsAffected})`);
     } else if (type === 'ace') {
       const winners = game.status === 'completed' && game.winners 
         ? game.winners.join(',') 
@@ -380,7 +361,6 @@ export async function updateGameInDB(game) {
           JSON.stringify(game)
         ]
       });
-      console.log(`✅ Saved ace game ${game.id} in database (rows affected: ${result.rowsAffected})`);
     } else if (type === 'rummy') {
       const result = await db.execute({
         sql: `INSERT OR REPLACE INTO games (id, type, title, createdAt, status, winner, maxPoints, data)
@@ -396,19 +376,61 @@ export async function updateGameInDB(game) {
           JSON.stringify(game)
         ]
       });
-      console.log(`✅ Saved rummy game ${game.id} in database (rows affected: ${result.rowsAffected})`);
     } else {
-      console.error(`❌ Unknown game type: ${game.type}`);
       return false;
     }
     
     return true;
   } catch (error) {
-    console.error('Error saving game:', error.message);
     return false;
   }
 }
 
+
+// Update user profile photo
+export async function updateUserProfilePhoto(userId, photoUrl) {
+  const db = getTursoClient();
+  if (!db) return false;
+
+  try {
+    const result = await db.execute({
+      sql: `UPDATE users SET profilePhoto = ? WHERE id = ?`,
+      args: [photoUrl, userId]
+    });
+    
+    return result.rowsAffected > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Get user by ID
+export async function getUserById(userId) {
+  const db = getTursoClient();
+  if (!db) return null;
+
+  try {
+    const result = await db.execute({
+      sql: 'SELECT * FROM users WHERE id = ?',
+      args: [userId]
+    });
+    
+    if (result.rows.length === 0) return null;
+    
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      username: row.username,
+      password: row.password,
+      name: row.name,
+      role: row.role,
+      createdAt: row.createdAt,
+      profilePhoto: row.profilePhoto || null
+    };
+  } catch (error) {
+    return null;
+  }
+}
 
 // Helper function for generic data operations
 export async function getData(key) {

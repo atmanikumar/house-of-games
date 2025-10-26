@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import styles from './page.module.css';
@@ -7,6 +8,23 @@ import styles from './page.module.css';
 export default function HistoryPage() {
   const router = useRouter();
   const { games, players } = useGame();
+  const [users, setUsers] = useState([]);
+
+  // Fetch users to get profile photos
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await fetch('/api/users');
+        if (response.ok) {
+          const data = await response.json();
+          setUsers(data);
+        }
+      } catch (error) {
+        // Silent fail
+      }
+    };
+    fetchUsers();
+  }, []);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -27,6 +45,11 @@ export default function HistoryPage() {
   const getPlayerAvatar = (playerId) => {
     const player = players.find(p => p.id === playerId);
     return player ? player.avatar : '👤';
+  };
+
+  const getPlayerProfilePhoto = (playerId) => {
+    const user = users.find(u => u.id === playerId);
+    return user?.profilePhoto || null;
   };
 
   const sortedGames = [...games].sort((a, b) => 
@@ -109,9 +132,17 @@ export default function HistoryPage() {
                       <div className={styles.winnerInfo} style={{ flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
                         {game.winners.map(winnerId => (
                           <div key={winnerId} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="avatar" style={{ fontSize: '18px' }}>
-                              {getPlayerAvatar(winnerId)}
-                            </span>
+                            {getPlayerProfilePhoto(winnerId) ? (
+                              <img 
+                                src={getPlayerProfilePhoto(winnerId)} 
+                                alt={getPlayerName(winnerId)}
+                                className={styles.winnerAvatar}
+                              />
+                            ) : (
+                              <span className="avatar" style={{ fontSize: '18px' }}>
+                                {getPlayerAvatar(winnerId)}
+                              </span>
+                            )}
                             <span className={styles.winnerName}>
                               {getPlayerName(winnerId)}
                             </span>
@@ -120,9 +151,17 @@ export default function HistoryPage() {
                       </div>
                     ) : (
                       <div className={styles.winnerInfo}>
-                        <span className="avatar" style={{ fontSize: '20px' }}>
-                          {getPlayerAvatar(game.winner)}
-                        </span>
+                        {getPlayerProfilePhoto(game.winner) ? (
+                          <img 
+                            src={getPlayerProfilePhoto(game.winner)} 
+                            alt={getPlayerName(game.winner)}
+                            className={styles.winnerAvatar}
+                          />
+                        ) : (
+                          <span className="avatar" style={{ fontSize: '20px' }}>
+                            {getPlayerAvatar(game.winner)}
+                          </span>
+                        )}
                         <span className={styles.winnerName}>
                           {getPlayerName(game.winner)}
                         </span>
@@ -136,9 +175,17 @@ export default function HistoryPage() {
                   <div className={styles.players}>
                     {game.players.map(player => (
                       <div key={player.id} className={styles.playerChip}>
-                        <span className="avatar" style={{ fontSize: '16px' }}>
-                          {player.avatar}
-                        </span>
+                        {getPlayerProfilePhoto(player.id) ? (
+                          <img 
+                            src={getPlayerProfilePhoto(player.id)} 
+                            alt={player.name}
+                            className={styles.playerAvatarSmall}
+                          />
+                        ) : (
+                          <span className="avatar" style={{ fontSize: '16px' }}>
+                            {player.avatar}
+                          </span>
+                        )}
                         <span className={styles.playerChipName}>{player.name}</span>
                         {game.type.toLowerCase() !== 'chess' && (
                           <span className={styles.playerPoints}>
@@ -160,7 +207,15 @@ export default function HistoryPage() {
                           <div className={styles.roundScores}>
                             {Object.entries(round.scores).slice(0, 3).map(([playerId, score]) => (
                               <span key={playerId} className={styles.miniScore}>
-                                {getPlayerAvatar(playerId)} {score}
+                                {getPlayerProfilePhoto(playerId) ? (
+                                  <img 
+                                    src={getPlayerProfilePhoto(playerId)} 
+                                    alt={getPlayerName(playerId)}
+                                    style={{ width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' }}
+                                  />
+                                ) : (
+                                  getPlayerAvatar(playerId)
+                                )} {score}
                               </span>
                             ))}
                           </div>

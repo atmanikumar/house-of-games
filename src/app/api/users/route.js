@@ -53,6 +53,7 @@ export async function GET() {
         name: user.name,
         role: user.role,
         createdAt: user.createdAt,
+        profilePhoto: user.profilePhoto || null,
         // Player stats
         avatar: playerData?.avatar || '👤',
         wins: playerData?.wins || 0,
@@ -65,7 +66,6 @@ export async function GET() {
 
     return NextResponse.json(usersWithStats);
   } catch (error) {
-    console.error('Error fetching users:', error);
     return NextResponse.json(
       { error: 'Failed to fetch users' },
       { status: 500 }
@@ -119,16 +119,13 @@ export async function POST(request) {
     };
 
     users.push(newUser);
-    console.log('💾 Saving new user:', { ...newUser, password: '[REDACTED]' });
     const saveResult = await saveUsers(users);
     if (!saveResult) {
-      console.error('❌ Failed to save users to database');
       return NextResponse.json(
         { error: 'Failed to save user to database' },
         { status: 500 }
       );
     }
-    console.log('✅ User saved successfully');
 
     // Also add as a player for game tracking (check if not already exists)
     let players = await getPlayers();
@@ -158,7 +155,6 @@ export async function POST(request) {
 
     return NextResponse.json(safeUser);
   } catch (error) {
-    console.error('Error creating user:', error);
     return NextResponse.json(
       { error: 'Failed to create user' },
       { status: 500 }

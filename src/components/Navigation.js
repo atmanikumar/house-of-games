@@ -41,6 +41,12 @@ export default function Navigation() {
               Users
             </Link>
           )}
+          <Link 
+            href="/profile" 
+            className={pathname === '/profile' ? styles.active : ''}
+          >
+            Profile
+          </Link>
         </div>
         {user && (
           <div className={styles.userSection}>
