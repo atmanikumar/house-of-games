@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import styles from './page.module.css';
@@ -34,8 +35,10 @@ export default function HistoryPage() {
     return player?.profilePhoto || null;
   };
 
-  const sortedGames = [...games].sort((a, b) => 
-    new Date(b.createdAt) - new Date(a.createdAt)
+  // Memoize sorted games to prevent blocking navigation
+  const sortedGames = useMemo(() => 
+    [...games].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)),
+    [games]
   );
 
   return (

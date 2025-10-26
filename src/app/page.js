@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import { useAuth } from '@/context/AuthContext';
@@ -42,44 +42,44 @@ export default function Home() {
     return null;
   }
 
-      // Calculate player stats filtered by game type
-      const getTopPlayersByGameType = (gameTypeFilter) => {
-        // Filter games by type (case-insensitive to handle both old and new games)
-        const filteredGames = games.filter(game => 
-          game.type.toLowerCase() === gameTypeFilter.toLowerCase() && 
-          game.status === 'completed'
-        );
-        
-        // Calculate stats for each player in filtered games
-        const playerStatsMap = {};
-        
-        filteredGames.forEach(game => {
-          game.players.forEach(gamePlayer => {
-            if (!playerStatsMap[gamePlayer.id]) {
-              const player = players.find(p => p.id === gamePlayer.id);
-              playerStatsMap[gamePlayer.id] = {
-                id: gamePlayer.id,
-                name: gamePlayer.name,
-                avatar: gamePlayer.avatar,
-                wins: 0,
-                totalGames: 0,
-                winPercentage: 0
-              };
-            }
-            
-            playerStatsMap[gamePlayer.id].totalGames += 1;
-            
-            // Check for multiple winners (Ace games) or single winner
-            const isWinner = game.winners && game.winners.length > 0
-              ? game.winners.includes(gamePlayer.id)
-              : game.winner === gamePlayer.id;
-            
-            if (isWinner) {
-              playerStatsMap[gamePlayer.id].wins += 1;
-            }
-          });
-        });
+  // Memoize top players calculation to prevent blocking navigation
+  const topPlayers = useMemo(() => {
+    // Filter games by type (case-insensitive to handle both old and new games)
+    const filteredGames = games.filter(game => 
+      game.type.toLowerCase() === filterGameType.toLowerCase() && 
+      game.status === 'completed'
+    );
     
+    // Calculate stats for each player in filtered games
+    const playerStatsMap = {};
+    
+    filteredGames.forEach(game => {
+      game.players.forEach(gamePlayer => {
+        if (!playerStatsMap[gamePlayer.id]) {
+          const player = players.find(p => p.id === gamePlayer.id);
+          playerStatsMap[gamePlayer.id] = {
+            id: gamePlayer.id,
+            name: gamePlayer.name,
+            avatar: gamePlayer.avatar,
+            wins: 0,
+            totalGames: 0,
+            winPercentage: 0
+          };
+        }
+        
+        playerStatsMap[gamePlayer.id].totalGames += 1;
+        
+        // Check for multiple winners (Ace games) or single winner
+        const isWinner = game.winners && game.winners.length > 0
+          ? game.winners.includes(gamePlayer.id)
+          : game.winner === gamePlayer.id;
+        
+        if (isWinner) {
+          playerStatsMap[gamePlayer.id].wins += 1;
+        }
+      });
+    });
+
     // Calculate win percentages and sort
     const statsArray = Object.values(playerStatsMap).map(player => ({
       ...player,
@@ -96,14 +96,15 @@ export default function Home() {
         return b.totalGames - a.totalGames;
       })
       .slice(0, 5); // Top 5 only
-  };
+  }, [games, players, filterGameType]);
   
-  const topPlayers = getTopPlayersByGameType(filterGameType);
-  
-  // Get recent matches (last 10)
-  const recentMatches = [...games]
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 10);
+  // Memoize recent matches to prevent blocking navigation
+  const recentMatches = useMemo(() => 
+    [...games]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 10),
+    [games]
+  );
 
   const handleNewGame = () => {
     if (players.length === 0) {
